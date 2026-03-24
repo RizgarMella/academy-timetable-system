@@ -287,7 +287,7 @@
             const resp = await fetch('/api/solver/run', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ year_id: parseInt(yearId), timeout })
+                body: JSON.stringify({ academic_year_id: parseInt(yearId), timeout_seconds: timeout })
             });
             const data = await resp.json();
 
@@ -360,9 +360,11 @@
         const statusPanel = document.getElementById('statusPanel');
         const resultsSection = document.getElementById('resultsSection');
 
-        const status = data.status || 'unknown';
-        const sessions = data.sessions_created || data.sessions || data.total_sessions || 0;
-        const solveTime = data.solve_time || data.duration || data.elapsed || 0;
+        // The solver API wraps results in stats: { status, sessions, wall_time, ... }
+        const stats = data.stats || data;
+        const status = stats.status || data.status || 'unknown';
+        const sessions = stats.sessions || data.sessions || data.sessions_created || 0;
+        const solveTime = stats.wall_time || data.wall_time || data.solve_time || 0;
         const solveTimeStr = typeof solveTime === 'number' ? solveTime.toFixed(1) + 's' : solveTime;
 
         let statusColor = '#2ec4b6';

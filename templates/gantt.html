@@ -270,6 +270,17 @@
 
 <!-- Tooltip -->
 <div class="tooltip" id="ganttTooltip" style="display:none;"></div>
+
+<!-- Block Detail Modal -->
+<div class="modal-overlay" id="blockDetailModal">
+    <div class="modal" style="width:480px;">
+        <div class="modal-header">
+            <h2 id="blockDetailTitle">Session Detail</h2>
+            <button class="modal-close" onclick="document.getElementById('blockDetailModal').classList.remove('active')">&times;</button>
+        </div>
+        <div class="modal-body" id="blockDetailBody"></div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -457,7 +468,7 @@
         const courseColors = {};
         let colorIdx = 0;
 
-        rows.forEach(row => {
+        rows.forEach((row, rIdx) => {
             const label = row.label || row.name || row.course_run || `Row ${row.id}`;
             const blocks = row.blocks || row.sessions || row.items || [];
 
@@ -465,7 +476,7 @@
                 <div class="gantt-row-label" title="${escHtml(label)}">${escHtml(label)}</div>
                 <div class="gantt-row-timeline" style="width:${timelineWidth}px;">`;
 
-            blocks.forEach(block => {
+            blocks.forEach((block, bIdx) => {
                 const bStart = new Date((block.start_date || block.date) + 'T00:00:00');
                 const bEnd = new Date((block.end_date || block.start_date || block.date) + 'T00:00:00');
                 const left = Math.round((bStart - startDate) / (1000 * 60 * 60 * 24)) * pxPerDay;
@@ -478,10 +489,14 @@
                 }
                 const color = courseColors[courseId];
                 const blockLabel = block.module_name || block.label || block.name || '';
-                const tooltipText = `${blockLabel}\\n${block.start_date || block.date} - ${block.end_date || block.date}\\nLecturer: ${block.lecturer_name || 'TBD'}\\nRoom: ${block.classroom_name || block.room || 'TBD'}`;
+                const lecturer = block.lecturer || block.lecturer_name || 'TBD';
+                const classroom = block.classroom || block.classroom_name || block.room || 'TBD';
+                const tooltipText = `${blockLabel}\\n${block.start_date || block.date} - ${block.end_date || block.date}\\nLecturer: ${lecturer}\\nRoom: ${classroom}`;
 
                 rowsHTML += `<div class="gantt-block" style="left:${left}px;width:${width}px;background:${color};"
                     data-tooltip="${escAttr(tooltipText)}"
+                    data-block-idx="${rIdx}-${bIdx}"
+                    onclick="showBlockDetail(${rIdx}, ${bIdx})"
                     onmouseenter="showTooltip(event)" onmouseleave="hideTooltip()">${escHtml(blockLabel)}</div>`;
             });
 
@@ -545,6 +560,47 @@
     function escAttr(s) {
         if (!s) return '';
         return s.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function showBlockDetail(rowIdx, blockIdx) {
+        const rows = Array.isArray(ganttData) ? ganttData :
+                     (ganttData && Array.isArray(ganttData.rows)) ? ganttData.rows : [];
+        const row = rows[rowIdx];
+        if (!row) return;
+        const blocks = row.blocks || row.sessions || row.items || [];
+        const block = blocks[blockIdx];
+        if (!block) return;
+
+        const label = block.module_name || block.label || block.name || 'Session';
+        document.getElementById('blockDetailTitle').textContent = label;
+
+        const days = block.start_date && block.end_date
+            ? Math.round((new Date(block.end_date + 'T00:00:00') - new Date(block.start_date + 'T00:00:00')) / (1000*60*60*24)) + 1
+            : 1;
+
+        let html = '<table style="width:100%;font-size:13px;border-collapse:collapse;">';
+        const fields = [
+            ['Module', block.module_name || block.module_code || '-'],
+            ['Course', block.course_code || '-'],
+            ['Type', block.session_type || '-'],
+            ['Lecturer', block.lecturer || block.lecturer_name || 'TBD'],
+            ['Classroom', block.classroom || block.classroom_name || 'TBD'],
+            ['Start', block.start_date || block.date || '-'],
+            ['End', block.end_date || block.start_date || block.date || '-'],
+            ['Duration', `${days} day${days !== 1 ? 's' : ''}`],
+            ['Students', block.student_count || '-'],
+            ['Status', block.is_proposal ? 'Proposal' : 'Confirmed'],
+        ];
+        fields.forEach(([k, v]) => {
+            html += `<tr style="border-bottom:1px solid #f0f0f0;">
+                <td style="padding:8px 4px;font-weight:600;color:#667085;width:100px;">${k}</td>
+                <td style="padding:8px 4px;">${escHtml(String(v))}</td>
+            </tr>`;
+        });
+        html += '</table>';
+
+        document.getElementById('blockDetailBody').innerHTML = html;
+        document.getElementById('blockDetailModal').classList.add('active');
     }
 
     initGantt();

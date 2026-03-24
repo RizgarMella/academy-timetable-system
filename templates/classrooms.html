@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+
+{% block title %}Classrooms{% endblock %}
+
+{% block page_title %}Classrooms{% endblock %}
+
+{% block page_actions %}
+<button class="btn btn-primary" onclick="openModal()">+ Add Classroom</button>
+{% endblock %}
+
+{% block content %}
+<style>
+    .room-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 16px;
+    }
+    .room-card {
+        background: #fff;
+        border-radius: 10px;
+        border: 1px solid #e8e8e8;
+        padding: 20px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        transition: box-shadow 0.2s;
+    }
+    .room-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    .room-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+    }
+    .room-card-header h3 { font-size: 16px; font-weight: 700; }
+    .room-card-actions { display: flex; gap: 6px; }
+    .room-meta { font-size: 13px; color: #667085; margin-bottom: 8px; }
+    .room-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+    .room-tag {
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    .room-tag-cap { background: #e8f0fe; color: #1a73e8; }
+    .room-tag-lab { background: #e6f4ea; color: #137333; }
+    .room-tag-proj { background: #fef7e0; color: #b06000; }
+</style>
+
+<div class="room-grid" id="roomGrid">
+    <div style="color:#98a2b3;text-align:center;padding:40px;">Loading...</div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="roomModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 id="modalTitle">Add Classroom</h2>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="roomId">
+            <div class="form-group">
+                <label for="roomName">Room Name</label>
+                <input type="text" id="roomName" placeholder="e.g. Room 101">
+            </div>
+            <div class="form-group">
+                <label for="roomBuilding">Building</label>
+                <input type="text" id="roomBuilding" placeholder="e.g. Main Building">
+            </div>
+            <div class="form-group">
+                <label for="roomCapacity">Capacity</label>
+                <input type="number" id="roomCapacity" value="30" min="1">
+            </div>
+            <div class="form-check">
+                <input type="checkbox" id="roomLab">
+                <label for="roomLab">Has Lab Equipment</label>
+            </div>
+            <div class="form-check">
+                <input type="checkbox" id="roomProjector" checked>
+                <label for="roomProjector">Has Projector</label>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveRoom()">Save</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let allRooms = [];
+
+    async function loadRooms() {
+        try {
+            allRooms = await fetch('/api/classrooms').then(r => r.json());
+            renderRooms();
+        } catch (err) {
+            document.getElementById('roomGrid').innerHTML = '<p style="color:#e63946;">Failed to load classrooms.</p>';
+        }
+    }
+
+    function renderRooms() {
+        const grid = document.getElementById('roomGrid');
+        if (allRooms.length === 0) {
+            grid.innerHTML = '<p style="color:#98a2b3;text-align:center;padding:40px;">No classrooms yet. Click "Add Classroom" to create one.</p>';
+            return;
+        }
+        grid.innerHTML = allRooms.map(r => `
+            <div class="room-card">
+                <div class="room-card-header">
+                    <h3>${esc(r.name)}</h3>
+                    <div class="room-card-actions">
+                        <button class="btn btn-sm btn-outline" onclick="editRoom(${r.id})">Edit</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteRoom(${r.id})">Delete</button>
+                    </div>
+                </div>
+                <div class="room-meta">${esc(r.building || 'No building specified')}</div>
+                <div class="room-tags">
+                    <span class="room-tag room-tag-cap">${r.capacity} seats</span>
+                    ${r.has_lab_equipment ? '<span class="room-tag room-tag-lab">Lab</span>' : ''}
+                    ${r.has_projector ? '<span class="room-tag room-tag-proj">Projector</span>' : ''}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function openModal(room) {
+        document.getElementById('roomId').value = room ? room.id : '';
+        document.getElementById('roomName').value = room ? room.name : '';
+        document.getElementById('roomBuilding').value = room ? (room.building || '') : '';
+        document.getElementById('roomCapacity').value = room ? room.capacity : 30;
+        document.getElementById('roomLab').checked = room ? room.has_lab_equipment : false;
+        document.getElementById('roomProjector').checked = room ? room.has_projector : true;
+        document.getElementById('modalTitle').textContent = room ? 'Edit Classroom' : 'Add Classroom';
+        document.getElementById('roomModal').classList.add('active');
+    }
+
+    function closeModal() {
+        document.getElementById('roomModal').classList.remove('active');
+    }
+
+    function editRoom(id) {
+        const room = allRooms.find(r => r.id === id);
+        if (room) openModal(room);
+    }
+
+    async function saveRoom() {
+        const id = document.getElementById('roomId').value;
+        const payload = {
+            name: document.getElementById('roomName').value.trim(),
+            building: document.getElementById('roomBuilding').value.trim(),
+            capacity: parseInt(document.getElementById('roomCapacity').value) || 30,
+            has_lab_equipment: document.getElementById('roomLab').checked,
+            has_projector: document.getElementById('roomProjector').checked,
+        };
+        if (!payload.name) { alert('Room name is required.'); return; }
+
+        try {
+            const url = id ? `/api/classrooms/${id}` : '/api/classrooms';
+            const method = id ? 'PUT' : 'POST';
+            await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            closeModal();
+            await loadRooms();
+        } catch (err) {
+            alert('Failed to save classroom.');
+        }
+    }
+
+    async function deleteRoom(id) {
+        if (!confirm('Delete this classroom?')) return;
+        try {
+            await fetch(`/api/classrooms/${id}`, { method: 'DELETE' });
+            await loadRooms();
+        } catch (err) {
+            alert('Failed to delete classroom.');
+        }
+    }
+
+    function esc(s) {
+        if (!s) return '';
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    loadRooms();
+</script>
+{% endblock %}

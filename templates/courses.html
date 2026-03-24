@@ -4,6 +4,10 @@
 
 {% block page_title %}Course Manager{% endblock %}
 
+{% block page_actions %}
+<button class="btn btn-primary" onclick="openCourseModal()">+ Add Course</button>
+{% endblock %}
+
 {% block content %}
 <style>
     .courses-layout {
@@ -263,6 +267,94 @@
         <div class="panel-empty">Select a course run to view details</div>
     </div>
 </div>
+
+<!-- Course Modal -->
+<div class="modal-overlay" id="courseModal">
+    <div class="modal" style="width:640px;">
+        <div class="modal-header">
+            <h2 id="courseModalTitle">Add Course</h2>
+            <button class="modal-close" onclick="closeCourseModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="courseId">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="courseCode">Code</label>
+                    <input type="text" id="courseCode" placeholder="e.g. CS101">
+                </div>
+                <div class="form-group">
+                    <label for="courseName">Name</label>
+                    <input type="text" id="courseName" placeholder="Course name">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="courseDesc">Description</label>
+                <textarea id="courseDesc" placeholder="Brief description"></textarea>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="courseWeeks">Total Weeks</label>
+                    <input type="number" id="courseWeeks" value="12" min="1">
+                </div>
+                <div class="form-group">
+                    <label for="courseMaxRuns">Max Concurrent Runs</label>
+                    <input type="number" id="courseMaxRuns" value="2" min="1">
+                </div>
+            </div>
+            <div style="border-top:1px solid #e8e8e8;margin:16px 0;padding-top:16px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                    <label style="font-weight:700;font-size:14px;">Modules</label>
+                    <button class="btn btn-sm btn-outline" onclick="addModuleRow()">+ Add Module</button>
+                </div>
+                <div id="moduleRows"></div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeCourseModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveCourse()">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Course Run Modal -->
+<div class="modal-overlay" id="courseRunModal">
+    <div class="modal" style="width:480px;">
+        <div class="modal-header">
+            <h2 id="crModalTitle">Add Course Run</h2>
+            <button class="modal-close" onclick="closeCRModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="crId">
+            <input type="hidden" id="crCourseId">
+            <div class="form-group">
+                <label for="crLabel">Cohort Label</label>
+                <input type="text" id="crLabel" placeholder="e.g. Cohort A 2025">
+            </div>
+            <div class="form-group">
+                <label for="crYear">Academic Year</label>
+                <select id="crYear"></select>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="crStart">Start Date</label>
+                    <input type="date" id="crStart">
+                </div>
+                <div class="form-group">
+                    <label for="crEnd">End Date</label>
+                    <input type="date" id="crEnd">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="crStudents">Student Count</label>
+                <input type="number" id="crStudents" value="20" min="1">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeCRModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveCourseRun()">Save</button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -296,6 +388,10 @@
                     <span class="course-code">${escHtml(c.code || 'N/A')}</span>
                     <span class="course-name" title="${escHtml(c.name)}">${escHtml(c.name)}</span>
                     <span class="course-module-count">${c.module_count || c.modules?.length || 0} mod</span>
+                    <span style="display:inline-flex;gap:2px;" onclick="event.stopPropagation();">
+                        <button class="btn btn-sm btn-outline" style="padding:1px 5px;font-size:10px;" onclick="editCourse(${c.id})">Edit</button>
+                        <button class="btn btn-sm btn-danger" style="padding:1px 5px;font-size:10px;" onclick="deleteCourse(${c.id})">Del</button>
+                    </span>
                 </div>
                 <div class="course-runs-list" style="display:none;" id="runs-${c.id}"></div>
             </div>
@@ -335,11 +431,13 @@
             return;
         }
 
-        runsList.innerHTML = runs.map(cr => {
+        let runsHTML = runs.map(cr => {
             const label = cr.cohort_label || cr.label || `Run #${cr.id}`;
             const status = cr.status || 'unknown';
-            const start = cr.start_date ? new Date(cr.start_date + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '';
-            const end = cr.end_date ? new Date(cr.end_date + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : '';
+            const sd = cr.planned_start_date || cr.start_date || '';
+            const ed = cr.planned_end_date || cr.end_date || '';
+            const start = sd ? new Date(sd + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '';
+            const end = ed ? new Date(ed + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : '';
             return `
                 <div class="course-run-item ${cr.id === selectedCourseRunId ? 'selected' : ''}" onclick="selectCourseRun(${cr.id}, ${courseId})">
                     <span class="cr-label">${escHtml(label)}</span>
@@ -348,6 +446,8 @@
                 </div>
             `;
         }).join('');
+        runsHTML += `<div class="course-run-item" style="justify-content:center;color:#4361ee;font-weight:600;" onclick="event.stopPropagation();openCRModal(${courseId})">+ Add Course Run</div>`;
+        runsList.innerHTML = runsHTML;
     }
 
     async function selectCourseRun(crId, courseId) {
@@ -525,6 +625,162 @@
         const d = document.createElement('div');
         d.textContent = s;
         return d.innerHTML;
+    }
+
+    // --- Course CRUD ---
+    function openCourseModal(course) {
+        document.getElementById('courseId').value = course ? course.id : '';
+        document.getElementById('courseCode').value = course ? course.code : '';
+        document.getElementById('courseName').value = course ? course.name : '';
+        document.getElementById('courseDesc').value = course ? (course.description || '') : '';
+        document.getElementById('courseWeeks').value = course ? course.total_weeks : 12;
+        document.getElementById('courseMaxRuns').value = course ? course.max_concurrent_runs : 2;
+        document.getElementById('courseModalTitle').textContent = course ? 'Edit Course' : 'Add Course';
+
+        const moduleRows = document.getElementById('moduleRows');
+        moduleRows.innerHTML = '';
+        if (course && course.modules) {
+            course.modules.forEach(m => addModuleRow(m));
+        }
+
+        document.getElementById('courseModal').classList.add('active');
+    }
+
+    function closeCourseModal() {
+        document.getElementById('courseModal').classList.remove('active');
+    }
+
+    let moduleRowIdx = 0;
+    function addModuleRow(mod) {
+        const idx = moduleRowIdx++;
+        const row = document.createElement('div');
+        row.className = 'form-row';
+        row.style.marginBottom = '8px';
+        row.style.alignItems = 'flex-end';
+        row.id = `modRow-${idx}`;
+        row.innerHTML = `
+            <div class="form-group" style="flex:0.8;margin-bottom:0;">
+                <input type="text" class="mod-code" placeholder="Code" value="${mod ? escHtml(mod.code) : ''}">
+            </div>
+            <div class="form-group" style="flex:1.5;margin-bottom:0;">
+                <input type="text" class="mod-name" placeholder="Module name" value="${mod ? escHtml(mod.name) : ''}">
+            </div>
+            <div class="form-group" style="flex:0.6;margin-bottom:0;">
+                <input type="number" class="mod-hours" placeholder="Hours" value="${mod ? mod.duration_hours : 20}" min="1">
+            </div>
+            <div class="form-check" style="margin-bottom:0;gap:4px;">
+                <input type="checkbox" class="mod-lab" ${mod && mod.requires_lab ? 'checked' : ''}>
+                <label style="font-size:11px;">Lab</label>
+            </div>
+            <button class="btn btn-sm btn-danger" style="margin-bottom:0;padding:4px 8px;" onclick="document.getElementById('modRow-${idx}').remove()">X</button>
+        `;
+        document.getElementById('moduleRows').appendChild(row);
+    }
+
+    async function saveCourse() {
+        const id = document.getElementById('courseId').value;
+        const payload = {
+            code: document.getElementById('courseCode').value.trim(),
+            name: document.getElementById('courseName').value.trim(),
+            description: document.getElementById('courseDesc').value.trim(),
+            total_weeks: parseInt(document.getElementById('courseWeeks').value) || 12,
+            max_concurrent_runs: parseInt(document.getElementById('courseMaxRuns').value) || 2,
+        };
+        if (!payload.code || !payload.name) { alert('Code and name are required.'); return; }
+
+        // Gather modules (only for new courses)
+        if (!id) {
+            const rows = document.getElementById('moduleRows').children;
+            payload.modules = [];
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                const code = row.querySelector('.mod-code').value.trim();
+                const name = row.querySelector('.mod-name').value.trim();
+                if (code && name) {
+                    payload.modules.push({
+                        code,
+                        name,
+                        duration_hours: parseInt(row.querySelector('.mod-hours').value) || 20,
+                        requires_lab: row.querySelector('.mod-lab').checked,
+                        sequence_order: i + 1,
+                    });
+                }
+            }
+        }
+
+        try {
+            const url = id ? `/api/courses/${id}` : '/api/courses';
+            const method = id ? 'PUT' : 'POST';
+            await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            closeCourseModal();
+            await initCourses();
+        } catch (err) { alert('Failed to save course.'); }
+    }
+
+    async function editCourse(courseId) {
+        try {
+            const course = await fetch(`/api/courses/${courseId}`).then(r => r.json());
+            openCourseModal(course);
+        } catch (err) { alert('Failed to load course.'); }
+    }
+
+    async function deleteCourse(courseId) {
+        if (!confirm('Delete this course and all its modules?')) return;
+        try {
+            await fetch(`/api/courses/${courseId}`, { method: 'DELETE' });
+            await initCourses();
+        } catch (err) { alert('Failed to delete course.'); }
+    }
+
+    // --- Course Run CRUD ---
+    async function openCRModal(courseId) {
+        document.getElementById('crId').value = '';
+        document.getElementById('crCourseId').value = courseId;
+        document.getElementById('crLabel').value = '';
+        document.getElementById('crStudents').value = 20;
+        document.getElementById('crStart').value = '';
+        document.getElementById('crEnd').value = '';
+        document.getElementById('crModalTitle').textContent = 'Add Course Run';
+
+        // Load academic years
+        const sel = document.getElementById('crYear');
+        try {
+            const years = await fetch('/api/academic-years').then(r => r.json());
+            sel.innerHTML = years.map(y => `<option value="${y.id}">${y.label}</option>`).join('');
+        } catch (e) { sel.innerHTML = '<option>No years</option>'; }
+
+        document.getElementById('courseRunModal').classList.add('active');
+    }
+
+    function closeCRModal() {
+        document.getElementById('courseRunModal').classList.remove('active');
+    }
+
+    async function saveCourseRun() {
+        const courseId = document.getElementById('crCourseId').value;
+        const payload = {
+            course_id: parseInt(courseId),
+            academic_year_id: parseInt(document.getElementById('crYear').value),
+            cohort_label: document.getElementById('crLabel').value.trim(),
+            planned_start_date: document.getElementById('crStart').value,
+            planned_end_date: document.getElementById('crEnd').value,
+            student_count: parseInt(document.getElementById('crStudents').value) || 20,
+        };
+        if (!payload.cohort_label || !payload.planned_start_date || !payload.planned_end_date) {
+            alert('Label and dates are required.'); return;
+        }
+
+        try {
+            await fetch('/api/course-runs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            closeCRModal();
+            // Refresh runs
+            courseRuns[courseId] = null;
+            await toggleCourse(parseInt(courseId));
+        } catch (err) { alert('Failed to create course run.'); }
     }
 
     initCourses();

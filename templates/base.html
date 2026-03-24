@@ -227,6 +227,74 @@
             border: 5px solid transparent;
             border-top-color: #1a1a2e;
         }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: #fff;
+            border-radius: 12px;
+            width: 560px;
+            max-width: 95vw;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+        }
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 24px;
+            border-bottom: 1px solid #e8e8e8;
+        }
+        .modal-header h2 { font-size: 18px; font-weight: 700; }
+        .modal-close {
+            background: none; border: none; font-size: 22px;
+            cursor: pointer; color: #98a2b3; padding: 4px 8px;
+        }
+        .modal-close:hover { color: #1a1a2e; }
+        .modal-body { padding: 24px; }
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid #e8e8e8;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        .form-group { margin-bottom: 16px; }
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #344054;
+            margin-bottom: 6px;
+        }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 9px 12px;
+            border: 1.5px solid #d0d5dd;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        .form-group textarea { resize: vertical; min-height: 60px; }
+        .form-row { display: flex; gap: 16px; }
+        .form-row .form-group { flex: 1; }
+        .form-check {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .form-check input[type="checkbox"] { width: auto; }
+        .form-check label { margin-bottom: 0; font-weight: 500; }
     </style>
 </head>
 <body>
@@ -247,6 +315,9 @@
             </a>
             <a href="/lecturers" class="{{ 'active' if request.path == '/lecturers' else '' }}">
                 <span class="nav-icon">&#128100;</span> Lecturers
+            </a>
+            <a href="/classrooms" class="{{ 'active' if request.path == '/classrooms' else '' }}">
+                <span class="nav-icon">&#127979;</span> Classrooms
             </a>
             <a href="/rules" class="{{ 'active' if request.path == '/rules' else '' }}">
                 <span class="nav-icon">&#9881;</span> Rules

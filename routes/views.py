@@ -23,6 +23,11 @@ def lecturers():
     return render_template('lecturers.html')
 
 
+@views_bp.route('/classrooms')
+def classrooms():
+    return render_template('classrooms.html')
+
+
 @views_bp.route('/rules')
 def rules():
     return render_template('rules.html')

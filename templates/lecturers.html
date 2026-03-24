@@ -7,6 +7,7 @@
 {% block page_actions %}
 <label for="loadingYear" style="font-size:13px;font-weight:600;color:#667085;">Academic Year:</label>
 <select id="loadingYear"></select>
+<button class="btn btn-primary" onclick="openLecturerModal()">+ Add Lecturer</button>
 {% endblock %}
 
 {% block content %}
@@ -95,6 +96,10 @@
         font-size: 12px;
         cursor: pointer;
         white-space: nowrap;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 220px;
     }
     .heatmap-table td.summary-cell {
         position: sticky;
@@ -213,6 +218,66 @@
     <div class="card-title" style="margin-bottom:16px;">Total Hours per Lecturer</div>
     <div id="barChart"></div>
 </div>
+
+<!-- Lecturer Modal -->
+<div class="modal-overlay" id="lecturerModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 id="lecModalTitle">Add Lecturer</h2>
+            <button class="modal-close" onclick="closeLecturerModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="lecId">
+            <div class="form-group">
+                <label for="lecName">Name</label>
+                <input type="text" id="lecName" placeholder="Full name">
+            </div>
+            <div class="form-group">
+                <label for="lecEmail">Email</label>
+                <input type="text" id="lecEmail" placeholder="email@example.com">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="lecMaxWeekly">Max Weekly Hours</label>
+                    <input type="number" id="lecMaxWeekly" value="25" min="1">
+                </div>
+                <div class="form-group">
+                    <label for="lecMaxDays">Max Consecutive Days</label>
+                    <input type="number" id="lecMaxDays" value="5" min="1">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="lecPrep">Prep Time (hours)</label>
+                    <input type="number" id="lecPrep" value="4" min="0" step="0.5">
+                </div>
+                <div class="form-group">
+                    <label for="lecWindDown">Wind-Down (hours)</label>
+                    <input type="number" id="lecWindDown" value="2" min="0" step="0.5">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="lecMarking">Marking Hours / Student</label>
+                <input type="number" id="lecMarking" value="0.5" min="0" step="0.1">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeLecturerModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveLecturer()">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Week Drill-Down Modal -->
+<div class="modal-overlay" id="weekDrillModal">
+    <div class="modal" style="width:480px;">
+        <div class="modal-header">
+            <h2 id="drillTitle">Week Details</h2>
+            <button class="modal-close" onclick="document.getElementById('weekDrillModal').classList.remove('active')">&times;</button>
+        </div>
+        <div class="modal-body" id="drillBody"></div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -324,14 +389,21 @@
             const lecId = l.id || l.lecturer_id;
 
             bodyHTML += `<tr data-lecturer-id="${lecId}">`;
-            bodyHTML += `<td class="name-cell" onclick="toggleLecturerBreakdown(${lecId})">${isExpanded ? '&#9660;' : '&#9654;'} ${escHtml(name)}</td>`;
+            bodyHTML += `<td class="name-cell">
+                <span onclick="toggleLecturerBreakdown(${lecId})" style="cursor:pointer;">${isExpanded ? '&#9660;' : '&#9654;'} ${escHtml(name)}</span>
+                <span style="margin-left:auto;display:inline-flex;gap:4px;">
+                    <button class="btn btn-sm btn-outline" style="padding:2px 6px;font-size:10px;" onclick="editLecturer(${lecId})">Edit</button>
+                    <button class="btn btn-sm btn-danger" style="padding:2px 6px;font-size:10px;" onclick="deleteLecturer(${lecId})">Del</button>
+                </span>
+            </td>`;
 
             for (let w = 1; w <= 52; w++) {
-                const hours = weeks[w] || weeks[String(w)] || 0;
+                const hours = Array.isArray(weeks) ? (weeks[w - 1] || 0) : (weeks[w] || weeks[String(w)] || 0);
                 const intensity = hours > 0 ? Math.max(0.15, Math.min(hours / maxWeeklyHours, 1)) : 0;
                 const bg = hours > 0 ? `rgba(67, 97, 238, ${intensity})` : 'transparent';
                 const textColor = intensity > 0.6 ? '#fff' : (hours > 0 ? '#4361ee' : 'transparent');
-                bodyHTML += `<td><div class="heatmap-cell" style="background:${bg};color:${textColor}" title="Week ${w}: ${hours}h">${hours > 0 ? hours : ''}</div></td>`;
+                const clickHandler = hours > 0 ? `onclick="showWeekDrill(${lecId}, ${w - 1})" style="cursor:pointer;"` : '';
+                bodyHTML += `<td ${clickHandler}><div class="heatmap-cell" style="background:${bg};color:${textColor}" title="Week ${w}: ${hours}h">${hours > 0 ? hours : ''}</div></td>`;
             }
 
             // Summary
@@ -410,6 +482,94 @@
         const d = document.createElement('div');
         d.textContent = s;
         return d.innerHTML;
+    }
+
+    // --- Lecturer CRUD ---
+    function openLecturerModal(lec) {
+        document.getElementById('lecId').value = lec ? lec.id : '';
+        document.getElementById('lecName').value = lec ? lec.name : '';
+        document.getElementById('lecEmail').value = lec ? (lec.email || '') : '';
+        document.getElementById('lecMaxWeekly').value = lec ? lec.max_weekly_hours : 25;
+        document.getElementById('lecMaxDays').value = lec ? lec.max_consecutive_days : 5;
+        document.getElementById('lecPrep').value = lec ? lec.prep_time_hours : 4;
+        document.getElementById('lecWindDown').value = lec ? lec.wind_down_hours : 2;
+        document.getElementById('lecMarking').value = lec ? lec.marking_hours_per_student : 0.5;
+        document.getElementById('lecModalTitle').textContent = lec ? 'Edit Lecturer' : 'Add Lecturer';
+        document.getElementById('lecturerModal').classList.add('active');
+    }
+
+    function closeLecturerModal() {
+        document.getElementById('lecturerModal').classList.remove('active');
+    }
+
+    async function saveLecturer() {
+        const id = document.getElementById('lecId').value;
+        const payload = {
+            name: document.getElementById('lecName').value.trim(),
+            email: document.getElementById('lecEmail').value.trim(),
+            max_weekly_hours: parseInt(document.getElementById('lecMaxWeekly').value) || 25,
+            max_consecutive_days: parseInt(document.getElementById('lecMaxDays').value) || 5,
+            prep_time_hours: parseFloat(document.getElementById('lecPrep').value) || 4,
+            wind_down_hours: parseFloat(document.getElementById('lecWindDown').value) || 2,
+            marking_hours_per_student: parseFloat(document.getElementById('lecMarking').value) || 0.5,
+        };
+        if (!payload.name) { alert('Name is required.'); return; }
+
+        try {
+            const url = id ? `/api/lecturers/${id}` : '/api/lecturers';
+            const method = id ? 'PUT' : 'POST';
+            await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            closeLecturerModal();
+            await loadData();
+        } catch (err) { alert('Failed to save lecturer.'); }
+    }
+
+    async function editLecturer(lecId) {
+        try {
+            const lec = await fetch(`/api/lecturers/${lecId}`).then(r => r.json());
+            openLecturerModal(lec);
+        } catch (err) { alert('Failed to load lecturer.'); }
+    }
+
+    async function deleteLecturer(lecId) {
+        if (!confirm('Delete this lecturer?')) return;
+        try {
+            await fetch(`/api/lecturers/${lecId}`, { method: 'DELETE' });
+            await loadData();
+        } catch (err) { alert('Failed to delete lecturer.'); }
+    }
+
+    // --- Week Drill-Down ---
+    function showWeekDrill(lecId, weekIdx) {
+        if (!loadingDataCache) return;
+        const lecturers = loadingDataCache.lecturers || [];
+        const lec = lecturers.find(l => (l.id || l.lecturer_id) === lecId);
+        if (!lec) return;
+
+        const weeks = loadingDataCache.weeks || [];
+        const weekLabel = weeks[weekIdx] || `Week ${weekIdx + 1}`;
+        const hours = (lec.weekly_hours || [])[weekIdx] || 0;
+        const details = (lec.weekly_details || [])[weekIdx] || [];
+
+        document.getElementById('drillTitle').textContent = `${escHtml(lec.name)} - ${weekLabel}`;
+
+        let html = `<div style="font-size:14px;font-weight:700;margin-bottom:12px;">${hours} hours total</div>`;
+        if (details.length === 0) {
+            html += '<p style="color:#98a2b3;">No sessions this week.</p>';
+        } else {
+            html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+            html += '<tr style="border-bottom:2px solid #e0e0e0;"><th style="text-align:left;padding:8px 4px;">Course</th><th style="text-align:left;padding:8px 4px;">Module</th><th style="text-align:right;padding:8px 4px;">Hours</th></tr>';
+            details.forEach(d => {
+                html += `<tr style="border-bottom:1px solid #f0f0f0;">
+                    <td style="padding:6px 4px;font-weight:600;">${escHtml(d.course)}</td>
+                    <td style="padding:6px 4px;">${escHtml(d.module)}</td>
+                    <td style="padding:6px 4px;text-align:right;">${d.hours}h</td>
+                </tr>`;
+            });
+            html += '</table>';
+        }
+        document.getElementById('drillBody').innerHTML = html;
+        document.getElementById('weekDrillModal').classList.add('active');
     }
 
     initLecturerLoading();
