@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block title %}Scheduling Rules{% endblock %}
+
+{% block page_title %}Scheduling Rules{% endblock %}
+
+{% block page_actions %}
+<a href="/solver" class="btn btn-primary">&#9889; Apply & Re-solve</a>
+{% endblock %}
+
+{% block content %}
+<style>
+    .rules-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        gap: 16px;
+    }
+    .rule-card {
+        background: #fff;
+        border-radius: 10px;
+        border: 1px solid #e8e8e8;
+        padding: 20px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        transition: border-color 0.2s;
+    }
+    .rule-card:hover { border-color: #c0c8e0; }
+    .rule-card.disabled { opacity: 0.6; }
+    .rule-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+    }
+    .rule-name {
+        font-size: 15px;
+        font-weight: 700;
+        color: #1a1a2e;
+    }
+    .rule-description {
+        font-size: 13px;
+        color: #667085;
+        margin-bottom: 16px;
+        line-height: 1.5;
+    }
+    .rule-input-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+    .rule-input-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #667085;
+        min-width: 60px;
+    }
+    .rule-input-row input[type="number"],
+    .rule-input-row input[type="text"] {
+        flex: 1;
+        padding: 7px 12px;
+    }
+    .rule-save-indicator {
+        font-size: 11px;
+        color: #2ec4b6;
+        opacity: 0;
+        transition: opacity 0.3s;
+        margin-top: 8px;
+    }
+    .rule-save-indicator.show { opacity: 1; }
+    .rules-empty {
+        text-align: center;
+        padding: 60px 20px;
+        color: #98a2b3;
+        font-size: 15px;
+    }
+    .rules-loading {
+        text-align: center;
+        padding: 60px 20px;
+    }
+</style>
+
+<div id="rulesContainer" class="rules-grid">
+    <div class="rules-loading"><div class="loading-spinner"></div><p style="margin-top:12px;color:#98a2b3;">Loading rules...</p></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let allRules = [];
+
+    async function initRules() {
+        try {
+            const rules = await fetch('/api/rules').then(r => r.json());
+            allRules = Array.isArray(rules) ? rules : [];
+            renderRules();
+        } catch (err) {
+            console.error('Failed to load rules:', err);
+            document.getElementById('rulesContainer').innerHTML = '<div class="rules-empty">Failed to load rules. Please try again.</div>';
+        }
+    }
+
+    function snakeToTitle(s) {
+        if (!s) return '';
+        return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    function renderRules() {
+        const container = document.getElementById('rulesContainer');
+
+        if (allRules.length === 0) {
+            container.innerHTML = '<div class="rules-empty">No scheduling rules found.</div>';
+            return;
+        }
+
+        container.innerHTML = allRules.map((rule, idx) => {
+            const name = rule.name || snakeToTitle(rule.key || rule.rule_key || '');
+            const desc = rule.description || '';
+            const enabled = rule.enabled !== undefined ? rule.enabled : rule.is_enabled !== undefined ? rule.is_enabled : true;
+            const value = rule.value !== undefined ? rule.value : rule.parameter !== undefined ? rule.parameter : '';
+            const ruleId = rule.id || idx;
+            const isNumeric = typeof value === 'number' || (typeof value === 'string' && !isNaN(value) && value.trim() !== '');
+
+            let inputHTML = '';
+            if (value !== '' && value !== null && value !== undefined) {
+                if (isNumeric) {
+                    inputHTML = `
+                        <div class="rule-input-row">
+                            <span class="rule-input-label">Value:</span>
+                            <input type="number" value="${value}" id="ruleValue-${ruleId}" onchange="saveRule(${ruleId})" step="any">
+                        </div>
+                    `;
+                } else {
+                    inputHTML = `
+                        <div class="rule-input-row">
+                            <span class="rule-input-label">Value:</span>
+                            <input type="text" value="${escAttr(String(value))}" id="ruleValue-${ruleId}" onchange="saveRule(${ruleId})">
+                        </div>
+                    `;
+                }
+            }
+
+            return `
+                <div class="rule-card ${enabled ? '' : 'disabled'}" id="ruleCard-${ruleId}">
+                    <div class="rule-header">
+                        <span class="rule-name">${escHtml(name)}</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" ${enabled ? 'checked' : ''} id="ruleEnabled-${ruleId}" onchange="saveRule(${ruleId})">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="rule-description">${escHtml(desc)}</div>
+                    ${inputHTML}
+                    <div class="rule-save-indicator" id="ruleSaved-${ruleId}">&#10003; Saved</div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    async function saveRule(ruleId) {
+        const enabledEl = document.getElementById(`ruleEnabled-${ruleId}`);
+        const valueEl = document.getElementById(`ruleValue-${ruleId}`);
+        const card = document.getElementById(`ruleCard-${ruleId}`);
+        const savedIndicator = document.getElementById(`ruleSaved-${ruleId}`);
+
+        const enabled = enabledEl ? enabledEl.checked : true;
+        card.classList.toggle('disabled', !enabled);
+
+        const payload = { enabled };
+        if (valueEl) {
+            const v = valueEl.value;
+            payload.value = valueEl.type === 'number' ? parseFloat(v) : v;
+        }
+
+        try {
+            const resp = await fetch(`/api/rules/${ruleId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (resp.ok) {
+                savedIndicator.classList.add('show');
+                setTimeout(() => savedIndicator.classList.remove('show'), 2000);
+
+                // Update local state
+                const rule = allRules.find(r => (r.id || allRules.indexOf(r)) === ruleId);
+                if (rule) {
+                    rule.enabled = enabled;
+                    if (payload.value !== undefined) rule.value = payload.value;
+                }
+            } else {
+                console.error('Failed to save rule:', resp.status);
+                alert('Failed to save rule. Please try again.');
+            }
+        } catch (err) {
+            console.error('Save rule error:', err);
+            alert('Failed to save rule. Network error.');
+        }
+    }
+
+    function escHtml(s) {
+        if (!s) return '';
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    function escAttr(s) {
+        if (!s) return '';
+        return s.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    initRules();
+</script>
+{% endblock %}

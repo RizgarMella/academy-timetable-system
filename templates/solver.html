@@ -1,0 +1,479 @@
+{% extends "base.html" %}
+
+{% block title %}Solver{% endblock %}
+
+{% block page_title %}Solver{% endblock %}
+
+{% block content %}
+<style>
+    .solver-layout {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    .solver-section {
+        background: #fff;
+        border-radius: 10px;
+        border: 1px solid #e8e8e8;
+        padding: 24px;
+        margin-bottom: 20px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .solver-section h3 {
+        font-size: 15px;
+        font-weight: 700;
+        color: #1a1a2e;
+        margin-bottom: 16px;
+    }
+    .solver-settings {
+        display: flex;
+        gap: 24px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+    }
+    .setting-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .setting-group label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #667085;
+    }
+    .timeout-display {
+        font-size: 13px;
+        font-weight: 600;
+        color: #4361ee;
+        min-width: 40px;
+    }
+    .timeout-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    input[type="range"] {
+        -webkit-appearance: none;
+        height: 6px;
+        background: #e0e0e0;
+        border-radius: 3px;
+        outline: none;
+        width: 200px;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #4361ee;
+        cursor: pointer;
+    }
+
+    .run-btn-wrapper {
+        text-align: center;
+        padding: 20px 0;
+    }
+    .run-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 16px 48px;
+        background: linear-gradient(135deg, #4361ee 0%, #3a56d4 100%);
+        color: #fff;
+        border: none;
+        border-radius: 12px;
+        font-size: 18px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s;
+        box-shadow: 0 4px 16px rgba(67,97,238,0.3);
+    }
+    .run-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 24px rgba(67,97,238,0.4);
+    }
+    .run-btn:active { transform: translateY(0); }
+    .run-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+
+    .status-panel {
+        text-align: center;
+        padding: 24px;
+    }
+    .status-idle { color: #98a2b3; }
+    .status-running { color: #4361ee; }
+    .status-complete { color: #2ec4b6; }
+    .status-error { color: #e63946; }
+
+    .solver-progress {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        padding: 20px 0;
+    }
+    .progress-ring {
+        width: 48px;
+        height: 48px;
+        border: 4px solid #e0e0e0;
+        border-top-color: #4361ee;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .results-section { display: none; }
+    .results-section.visible { display: block; }
+    .result-stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        margin-bottom: 20px;
+    }
+    .result-stat {
+        text-align: center;
+        padding: 16px;
+        background: #f8f9fa;
+        border-radius: 8px;
+    }
+    .result-stat .stat-val {
+        font-size: 28px;
+        font-weight: 800;
+        color: #1a1a2e;
+    }
+    .result-stat .stat-lbl {
+        font-size: 12px;
+        color: #667085;
+        margin-top: 4px;
+    }
+    .result-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        margin-top: 16px;
+    }
+
+    .previous-runs {
+        margin-top: 16px;
+    }
+    .run-log-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 0;
+        border-bottom: 1px solid #f0f0f0;
+        font-size: 13px;
+    }
+    .run-log-item:last-child { border-bottom: none; }
+    .run-log-time {
+        font-size: 11px;
+        color: #98a2b3;
+        min-width: 140px;
+    }
+    .run-log-status { min-width: 80px; }
+</style>
+
+<div class="solver-layout">
+    <!-- Settings -->
+    <div class="solver-section">
+        <h3>&#9881; Solver Settings</h3>
+        <div class="solver-settings">
+            <div class="setting-group">
+                <label for="solverYear">Academic Year</label>
+                <select id="solverYear"></select>
+            </div>
+            <div class="setting-group">
+                <label>Timeout</label>
+                <div class="timeout-row">
+                    <input type="range" id="solverTimeout" min="30" max="300" value="120" step="10" oninput="updateTimeoutDisplay()">
+                    <span class="timeout-display" id="timeoutDisplay">120s</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Run Button -->
+    <div class="solver-section">
+        <div class="run-btn-wrapper">
+            <button class="run-btn" id="runSolverBtn" onclick="runSolver()">
+                &#9889; Run Solver
+            </button>
+        </div>
+    </div>
+
+    <!-- Status -->
+    <div class="solver-section">
+        <h3>Status</h3>
+        <div class="status-panel" id="statusPanel">
+            <div class="status-idle">Ready to solve. Configure settings and click Run Solver.</div>
+        </div>
+    </div>
+
+    <!-- Results -->
+    <div class="solver-section results-section" id="resultsSection">
+        <h3>&#9989; Results</h3>
+        <div class="result-stats" id="resultStats"></div>
+        <div class="result-actions">
+            <a href="/gantt" class="btn btn-primary">&#128202; View in Gantt</a>
+            <button class="btn btn-success" onclick="confirmProposals()">&#10003; Confirm Proposals</button>
+        </div>
+    </div>
+
+    <!-- Previous Runs -->
+    <div class="solver-section">
+        <h3>Previous Runs</h3>
+        <div class="previous-runs" id="previousRuns">
+            <p style="color:#98a2b3;font-size:13px;">No previous runs in this session.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let currentJobId = null;
+    let pollInterval = null;
+    let runHistory = [];
+
+    async function initSolver() {
+        try {
+            const years = await fetch('/api/academic-years').then(r => r.json());
+            const sel = document.getElementById('solverYear');
+            sel.innerHTML = '';
+            if (Array.isArray(years)) {
+                years.forEach(y => {
+                    const opt = document.createElement('option');
+                    opt.value = y.id;
+                    opt.textContent = y.name || y.label || `${y.start_year}/${y.end_year}`;
+                    if (y.is_current) opt.selected = true;
+                    sel.appendChild(opt);
+                });
+            }
+        } catch (err) {
+            console.error('Init solver error:', err);
+        }
+        updateTimeoutDisplay();
+    }
+
+    function updateTimeoutDisplay() {
+        document.getElementById('timeoutDisplay').textContent = document.getElementById('solverTimeout').value + 's';
+    }
+
+    async function runSolver() {
+        const yearId = document.getElementById('solverYear').value;
+        const timeout = parseInt(document.getElementById('solverTimeout').value);
+        const btn = document.getElementById('runSolverBtn');
+        const statusPanel = document.getElementById('statusPanel');
+
+        btn.disabled = true;
+        btn.innerHTML = '<div class="loading-spinner" style="border-top-color:#fff;width:20px;height:20px;"></div> Running...';
+
+        statusPanel.innerHTML = `
+            <div class="solver-progress">
+                <div class="progress-ring"></div>
+                <div>
+                    <div style="font-weight:700;font-size:16px;color:#4361ee;">Solver Running</div>
+                    <div style="font-size:13px;color:#667085;margin-top:4px;">Optimizing timetable... This may take up to ${timeout} seconds.</div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('resultsSection').classList.remove('visible');
+
+        try {
+            const resp = await fetch('/api/solver/run', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ year_id: parseInt(yearId), timeout })
+            });
+            const data = await resp.json();
+
+            if (data.job_id) {
+                currentJobId = data.job_id;
+                pollStatus(data.job_id);
+            } else if (data.status === 'completed' || data.status === 'optimal' || data.status === 'feasible') {
+                // Synchronous solve - show results immediately
+                showResults(data);
+                btn.disabled = false;
+                btn.innerHTML = '&#9889; Run Solver';
+            } else if (data.error) {
+                statusPanel.innerHTML = `<div class="status-error">Error: ${escHtml(data.error)}</div>`;
+                btn.disabled = false;
+                btn.innerHTML = '&#9889; Run Solver';
+            } else {
+                // Treat unknown response as needing polling if id present
+                currentJobId = data.id || data.job_id;
+                if (currentJobId) {
+                    pollStatus(currentJobId);
+                } else {
+                    showResults(data);
+                    btn.disabled = false;
+                    btn.innerHTML = '&#9889; Run Solver';
+                }
+            }
+        } catch (err) {
+            console.error('Solver run error:', err);
+            statusPanel.innerHTML = `<div class="status-error">Failed to start solver. ${escHtml(err.message)}</div>`;
+            btn.disabled = false;
+            btn.innerHTML = '&#9889; Run Solver';
+        }
+    }
+
+    function pollStatus(jobId) {
+        if (pollInterval) clearInterval(pollInterval);
+
+        pollInterval = setInterval(async () => {
+            try {
+                const resp = await fetch(`/api/solver/status/${jobId}`);
+                const data = await resp.json();
+
+                const status = data.status || '';
+                if (status === 'running' || status === 'pending' || status === 'queued') {
+                    // Still running - update progress if available
+                    const progress = data.progress || '';
+                    if (progress) {
+                        document.getElementById('statusPanel').querySelector('div > div:last-child div:last-child').textContent = progress;
+                    }
+                } else {
+                    // Done
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                    showResults(data);
+                    document.getElementById('runSolverBtn').disabled = false;
+                    document.getElementById('runSolverBtn').innerHTML = '&#9889; Run Solver';
+                }
+            } catch (err) {
+                console.error('Poll error:', err);
+                clearInterval(pollInterval);
+                pollInterval = null;
+                document.getElementById('statusPanel').innerHTML = '<div class="status-error">Lost connection to solver.</div>';
+                document.getElementById('runSolverBtn').disabled = false;
+                document.getElementById('runSolverBtn').innerHTML = '&#9889; Run Solver';
+            }
+        }, 2000);
+    }
+
+    function showResults(data) {
+        const statusPanel = document.getElementById('statusPanel');
+        const resultsSection = document.getElementById('resultsSection');
+
+        const status = data.status || 'unknown';
+        const sessions = data.sessions_created || data.sessions || data.total_sessions || 0;
+        const solveTime = data.solve_time || data.duration || data.elapsed || 0;
+        const solveTimeStr = typeof solveTime === 'number' ? solveTime.toFixed(1) + 's' : solveTime;
+
+        let statusColor = '#2ec4b6';
+        let statusText = 'Completed';
+        if (status === 'optimal') { statusText = 'Optimal Solution Found'; statusColor = '#2ec4b6'; }
+        else if (status === 'feasible') { statusText = 'Feasible Solution Found'; statusColor = '#f4a261'; }
+        else if (status === 'infeasible') { statusText = 'Infeasible - No Solution'; statusColor = '#e63946'; }
+        else if (status === 'error' || status === 'failed') { statusText = 'Error'; statusColor = '#e63946'; }
+        else if (status === 'completed') { statusText = 'Completed'; statusColor = '#2ec4b6'; }
+
+        statusPanel.innerHTML = `
+            <div style="color:${statusColor};font-size:18px;font-weight:700;">
+                ${status === 'infeasible' || status === 'error' ? '&#10060;' : '&#9989;'} ${statusText}
+            </div>
+        `;
+
+        if (status !== 'infeasible' && status !== 'error' && status !== 'failed') {
+            resultsSection.classList.add('visible');
+            document.getElementById('resultStats').innerHTML = `
+                <div class="result-stat">
+                    <div class="stat-val">${sessions}</div>
+                    <div class="stat-lbl">Sessions Created</div>
+                </div>
+                <div class="result-stat">
+                    <div class="stat-val">${solveTimeStr}</div>
+                    <div class="stat-lbl">Solve Time</div>
+                </div>
+                <div class="result-stat">
+                    <div class="stat-val" style="color:${statusColor}">${status}</div>
+                    <div class="stat-lbl">Status</div>
+                </div>
+            `;
+        } else {
+            resultsSection.classList.remove('visible');
+        }
+
+        // Add to run history
+        runHistory.unshift({
+            time: new Date().toLocaleString('en-GB'),
+            status,
+            sessions,
+            solveTime: solveTimeStr,
+            yearId: document.getElementById('solverYear').value
+        });
+        renderRunHistory();
+    }
+
+    function renderRunHistory() {
+        const el = document.getElementById('previousRuns');
+        if (runHistory.length === 0) {
+            el.innerHTML = '<p style="color:#98a2b3;font-size:13px;">No previous runs in this session.</p>';
+            return;
+        }
+
+        el.innerHTML = runHistory.map(r => {
+            const statusBadge = r.status === 'optimal' || r.status === 'completed'
+                ? 'badge-confirmed' : r.status === 'feasible'
+                ? 'badge-proposal' : 'badge-pending';
+            return `
+                <div class="run-log-item">
+                    <span class="run-log-time">${r.time}</span>
+                    <span class="run-log-status"><span class="badge ${statusBadge}">${r.status}</span></span>
+                    <span style="flex:1">${r.sessions} sessions in ${r.solveTime}</span>
+                </div>
+            `;
+        }).join('');
+    }
+
+    async function confirmProposals() {
+        const btn = event.target;
+        btn.disabled = true;
+        btn.textContent = 'Confirming...';
+
+        try {
+            const resp = await fetch('/api/schedule/confirm', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ year_id: parseInt(document.getElementById('solverYear').value) })
+            });
+            const data = await resp.json();
+
+            if (resp.ok) {
+                btn.textContent = 'Confirmed!';
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-outline');
+                setTimeout(() => {
+                    btn.textContent = '&#10003; Confirm Proposals';
+                    btn.classList.add('btn-success');
+                    btn.classList.remove('btn-outline');
+                    btn.disabled = false;
+                }, 2000);
+            } else {
+                alert('Failed to confirm: ' + (data.error || 'Unknown error'));
+                btn.disabled = false;
+                btn.innerHTML = '&#10003; Confirm Proposals';
+            }
+        } catch (err) {
+            console.error('Confirm error:', err);
+            alert('Failed to confirm proposals.');
+            btn.disabled = false;
+            btn.innerHTML = '&#10003; Confirm Proposals';
+        }
+    }
+
+    function escHtml(s) {
+        if (!s) return '';
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    initSolver();
+</script>
+{% endblock %}

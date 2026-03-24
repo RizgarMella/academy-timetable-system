@@ -1,0 +1,532 @@
+{% extends "base.html" %}
+
+{% block title %}Course Manager{% endblock %}
+
+{% block page_title %}Course Manager{% endblock %}
+
+{% block content %}
+<style>
+    .courses-layout {
+        display: flex;
+        gap: 0;
+        height: calc(100vh - 140px);
+        background: #fff;
+        border-radius: 10px;
+        border: 1px solid #e8e8e8;
+        overflow: hidden;
+    }
+    .courses-panel-left {
+        width: 300px;
+        min-width: 300px;
+        border-right: 1px solid #e0e0e0;
+        overflow-y: auto;
+        background: #fafbfc;
+    }
+    .courses-panel-right {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0;
+    }
+    .course-search {
+        padding: 12px;
+        border-bottom: 1px solid #e0e0e0;
+        position: sticky;
+        top: 0;
+        background: #fafbfc;
+        z-index: 2;
+    }
+    .course-search input {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1.5px solid #d0d5dd;
+        border-radius: 6px;
+        font-size: 13px;
+    }
+    .course-item {
+        border-bottom: 1px solid #f0f0f0;
+        cursor: pointer;
+    }
+    .course-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        transition: background 0.15s;
+    }
+    .course-header:hover { background: #f0f2f5; }
+    .course-header.expanded { background: #e8f0fe; }
+    .course-code {
+        background: #4361ee;
+        color: #fff;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .course-name {
+        flex: 1;
+        font-size: 13px;
+        font-weight: 600;
+        color: #1a1a2e;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .course-module-count {
+        font-size: 11px;
+        color: #98a2b3;
+    }
+    .course-expand-icon {
+        font-size: 10px;
+        color: #98a2b3;
+        transition: transform 0.2s;
+    }
+    .course-header.expanded .course-expand-icon { transform: rotate(90deg); }
+    .course-runs-list {
+        background: #f5f6fa;
+        border-top: 1px solid #e8e8e8;
+    }
+    .course-run-item {
+        padding: 8px 12px 8px 32px;
+        font-size: 12px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: background 0.15s;
+        border-bottom: 1px solid #eee;
+    }
+    .course-run-item:hover { background: #e8f0fe; }
+    .course-run-item.selected { background: #d6e4ff; }
+    .cr-label { flex: 1; font-weight: 500; }
+    .cr-dates { font-size: 11px; color: #667085; }
+
+    /* Right panel */
+    .panel-empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: #98a2b3;
+        font-size: 15px;
+    }
+    .cr-detail-header {
+        padding: 20px 24px;
+        border-bottom: 1px solid #e0e0e0;
+        background: #fafbfc;
+    }
+    .cr-detail-header h2 { font-size: 18px; margin-bottom: 6px; }
+    .cr-detail-meta {
+        display: flex;
+        gap: 16px;
+        font-size: 13px;
+        color: #667085;
+        flex-wrap: wrap;
+    }
+    .cr-detail-meta span { display: flex; align-items: center; gap: 4px; }
+    .cr-tabs {
+        display: flex;
+        border-bottom: 2px solid #e0e0e0;
+        padding: 0 24px;
+        background: #fff;
+        position: sticky;
+        top: 0;
+        z-index: 2;
+    }
+    .cr-tab {
+        padding: 12px 20px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #667085;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -2px;
+        transition: all 0.2s;
+    }
+    .cr-tab:hover { color: #4361ee; }
+    .cr-tab.active { color: #4361ee; border-bottom-color: #4361ee; }
+    .cr-tab-content { padding: 20px 24px; }
+    .cr-tab-panel { display: none; }
+    .cr-tab-panel.active { display: block; }
+
+    /* Mini gantt */
+    .mini-gantt { overflow-x: auto; }
+    .mini-gantt-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+    }
+    .mini-gantt-label {
+        width: 120px;
+        min-width: 120px;
+        font-size: 12px;
+        font-weight: 500;
+        text-align: right;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .mini-gantt-bar-container {
+        flex: 1;
+        position: relative;
+        height: 28px;
+    }
+    .mini-gantt-bar {
+        position: absolute;
+        height: 24px;
+        top: 2px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        padding: 0 6px;
+        font-size: 10px;
+        font-weight: 600;
+        color: #fff;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    .mini-gantt-meta {
+        font-size: 11px;
+        color: #667085;
+        width: 140px;
+        min-width: 140px;
+    }
+
+    /* Loading bars */
+    .lecturer-loading-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 0;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    .ll-name {
+        width: 140px;
+        min-width: 140px;
+        font-size: 13px;
+        font-weight: 500;
+    }
+    .ll-bar-wrap {
+        flex: 1;
+        height: 20px;
+        background: #f0f2f5;
+        border-radius: 4px;
+        overflow: hidden;
+        position: relative;
+    }
+    .ll-bar-total {
+        height: 100%;
+        border-radius: 4px;
+        background: #d0d5dd;
+    }
+    .ll-bar-highlight {
+        position: absolute;
+        top: 0;
+        height: 100%;
+        background: #4361ee;
+        border-radius: 4px;
+    }
+    .ll-hours {
+        width: 80px;
+        text-align: right;
+        font-size: 12px;
+        color: #667085;
+    }
+
+    /* Resits */
+    .resit-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 0;
+        border-bottom: 1px solid #f0f0f0;
+        font-size: 13px;
+    }
+    .resit-module { flex: 1; font-weight: 500; }
+    .resit-student { width: 120px; color: #667085; }
+    .resit-lecturer { width: 120px; color: #667085; }
+    .resit-examiner { width: 120px; color: #667085; }
+</style>
+
+<div class="courses-layout">
+    <!-- Left Panel -->
+    <div class="courses-panel-left">
+        <div class="course-search">
+            <input type="text" id="courseSearch" placeholder="Search courses..." oninput="filterCourses()">
+        </div>
+        <div id="courseList"></div>
+    </div>
+    <!-- Right Panel -->
+    <div class="courses-panel-right" id="courseDetail">
+        <div class="panel-empty">Select a course run to view details</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let allCourses = [];
+    let courseRuns = {};
+    let selectedCourseRunId = null;
+
+    async function initCourses() {
+        try {
+            const courses = await fetch('/api/courses').then(r => r.json());
+            allCourses = Array.isArray(courses) ? courses : [];
+            renderCourseList();
+        } catch (err) {
+            console.error('Failed to load courses:', err);
+        }
+    }
+
+    function renderCourseList() {
+        const search = (document.getElementById('courseSearch').value || '').toLowerCase();
+        const filtered = allCourses.filter(c =>
+            (c.name || '').toLowerCase().includes(search) ||
+            (c.code || '').toLowerCase().includes(search)
+        );
+
+        const listEl = document.getElementById('courseList');
+        listEl.innerHTML = filtered.map(c => `
+            <div class="course-item" id="course-${c.id}">
+                <div class="course-header" onclick="toggleCourse(${c.id})">
+                    <span class="course-expand-icon">&#9654;</span>
+                    <span class="course-code">${escHtml(c.code || 'N/A')}</span>
+                    <span class="course-name" title="${escHtml(c.name)}">${escHtml(c.name)}</span>
+                    <span class="course-module-count">${c.module_count || c.modules?.length || 0} mod</span>
+                </div>
+                <div class="course-runs-list" style="display:none;" id="runs-${c.id}"></div>
+            </div>
+        `).join('');
+    }
+
+    function filterCourses() {
+        renderCourseList();
+    }
+
+    async function toggleCourse(courseId) {
+        const header = document.querySelector(`#course-${courseId} .course-header`);
+        const runsList = document.getElementById(`runs-${courseId}`);
+
+        if (header.classList.contains('expanded')) {
+            header.classList.remove('expanded');
+            runsList.style.display = 'none';
+            return;
+        }
+
+        header.classList.add('expanded');
+        runsList.style.display = 'block';
+
+        if (!courseRuns[courseId]) {
+            runsList.innerHTML = '<div style="padding:8px 32px;font-size:12px;color:#98a2b3;">Loading...</div>';
+            try {
+                const runs = await fetch(`/api/course-runs?course_id=${courseId}`).then(r => r.json());
+                courseRuns[courseId] = Array.isArray(runs) ? runs : [];
+            } catch (err) {
+                courseRuns[courseId] = [];
+            }
+        }
+
+        const runs = courseRuns[courseId];
+        if (runs.length === 0) {
+            runsList.innerHTML = '<div style="padding:8px 32px;font-size:12px;color:#98a2b3;">No course runs</div>';
+            return;
+        }
+
+        runsList.innerHTML = runs.map(cr => {
+            const label = cr.cohort_label || cr.label || `Run #${cr.id}`;
+            const status = cr.status || 'unknown';
+            const start = cr.start_date ? new Date(cr.start_date + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '';
+            const end = cr.end_date ? new Date(cr.end_date + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : '';
+            return `
+                <div class="course-run-item ${cr.id === selectedCourseRunId ? 'selected' : ''}" onclick="selectCourseRun(${cr.id}, ${courseId})">
+                    <span class="cr-label">${escHtml(label)}</span>
+                    <span class="badge badge-${status}">${status}</span>
+                    ${start ? `<span class="cr-dates">${start} - ${end}</span>` : ''}
+                </div>
+            `;
+        }).join('');
+    }
+
+    async function selectCourseRun(crId, courseId) {
+        selectedCourseRunId = crId;
+        document.querySelectorAll('.course-run-item').forEach(el => el.classList.remove('selected'));
+        event.currentTarget.classList.add('selected');
+
+        const detailEl = document.getElementById('courseDetail');
+        detailEl.innerHTML = '<div class="panel-empty"><div class="loading-spinner"></div></div>';
+
+        const cr = courseRuns[courseId]?.find(r => r.id === crId);
+        if (!cr) return;
+
+        // Fetch schedule and loading data
+        let schedule = [], loadingData = {};
+        try {
+            [schedule, loadingData] = await Promise.all([
+                fetch(`/api/schedule?course_run_id=${crId}`).then(r => r.json()).catch(() => []),
+                fetch(`/api/schedule/loading?year_id=${cr.academic_year_id || 1}`).then(r => r.json()).catch(() => ({}))
+            ]);
+        } catch (e) { /* continue */ }
+        if (!Array.isArray(schedule)) schedule = [];
+
+        // Fetch resits
+        let resits = [];
+        try {
+            resits = await fetch(`/api/resits?course_run_id=${crId}`).then(r => r.json()).catch(() => []);
+            if (!Array.isArray(resits)) resits = [];
+        } catch (e) { /* continue */ }
+
+        const label = cr.cohort_label || cr.label || `Run #${cr.id}`;
+        const status = cr.status || 'unknown';
+        const startD = cr.start_date || '';
+        const endD = cr.end_date || '';
+        const students = cr.student_count || cr.num_students || '-';
+
+        // Build detail view
+        detailEl.innerHTML = `
+            <div class="cr-detail-header">
+                <h2>${escHtml(label)}</h2>
+                <div class="cr-detail-meta">
+                    <span>&#128197; ${startD} to ${endD}</span>
+                    <span>&#127891; ${students} students</span>
+                    <span class="badge badge-${status}">${status}</span>
+                </div>
+            </div>
+            <div class="cr-tabs">
+                <div class="cr-tab active" onclick="switchTab('schedule', this)">Schedule</div>
+                <div class="cr-tab" onclick="switchTab('lecturers', this)">Lecturers</div>
+                <div class="cr-tab" onclick="switchTab('resits', this)">Resits</div>
+            </div>
+            <div class="cr-tab-content">
+                <div id="tab-schedule" class="cr-tab-panel active">${renderScheduleTab(schedule, cr)}</div>
+                <div id="tab-lecturers" class="cr-tab-panel">${renderLecturersTab(schedule, loadingData, cr)}</div>
+                <div id="tab-resits" class="cr-tab-panel">${renderResitsTab(resits)}</div>
+            </div>
+        `;
+    }
+
+    function switchTab(tabName, el) {
+        document.querySelectorAll('.cr-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.cr-tab-panel').forEach(p => p.classList.remove('active'));
+        el.classList.add('active');
+        document.getElementById(`tab-${tabName}`).classList.add('active');
+    }
+
+    function renderScheduleTab(schedule, cr) {
+        if (schedule.length === 0) return '<p style="color:#98a2b3;padding:16px 0;">No sessions scheduled</p>';
+
+        // Find date range for mini gantt
+        let minD = '9999-12-31', maxD = '0000-01-01';
+        schedule.forEach(s => {
+            const sd = s.start_date || s.date;
+            const ed = s.end_date || s.start_date || s.date;
+            if (sd && sd < minD) minD = sd;
+            if (ed && ed > maxD) maxD = ed;
+        });
+        const rangeStart = new Date(minD + 'T00:00:00');
+        const rangeEnd = new Date(maxD + 'T00:00:00');
+        const totalDays = Math.max(Math.ceil((rangeEnd - rangeStart) / (1000 * 60 * 60 * 24)) + 1, 1);
+
+        let html = '<div class="mini-gantt">';
+        schedule.forEach((s, i) => {
+            const sd = new Date((s.start_date || s.date) + 'T00:00:00');
+            const ed = new Date((s.end_date || s.start_date || s.date) + 'T00:00:00');
+            const leftPct = ((sd - rangeStart) / (1000 * 60 * 60 * 24)) / totalDays * 100;
+            const widthPct = Math.max(((ed - sd) / (1000 * 60 * 60 * 24) + 1) / totalDays * 100, 2);
+            const color = `hsl(${(s.module_id || i) * 47 % 360}, 70%, 65%)`;
+            const moduleName = s.module_name || s.name || `Module ${i + 1}`;
+            const lecturer = s.lecturer_name || 'TBD';
+            const room = s.classroom_name || s.room || 'TBD';
+
+            html += `
+                <div class="mini-gantt-row">
+                    <div class="mini-gantt-label" title="${escHtml(moduleName)}">${escHtml(moduleName)}</div>
+                    <div class="mini-gantt-bar-container">
+                        <div class="mini-gantt-bar" style="left:${leftPct}%;width:${widthPct}%;background:${color};">${escHtml(moduleName)}</div>
+                    </div>
+                    <div class="mini-gantt-meta">${escHtml(lecturer)} / ${escHtml(room)}</div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        return html;
+    }
+
+    function renderLecturersTab(schedule, loadingData, cr) {
+        // Extract unique lecturers from schedule
+        const lecturerMap = {};
+        schedule.forEach(s => {
+            if (s.lecturer_id) {
+                if (!lecturerMap[s.lecturer_id]) {
+                    lecturerMap[s.lecturer_id] = { name: s.lecturer_name || `Lecturer #${s.lecturer_id}`, hours: 0 };
+                }
+                lecturerMap[s.lecturer_id].hours += s.duration_hours || s.hours || 0;
+            }
+        });
+
+        const lecturers = Object.entries(lecturerMap);
+        if (lecturers.length === 0) return '<p style="color:#98a2b3;padding:16px 0;">No lecturers assigned</p>';
+
+        // Get loading totals
+        const allLoading = loadingData.lecturers || loadingData.loading || [];
+        const maxHours = Math.max(...allLoading.map(l => l.total_hours || l.hours || 0), 1);
+
+        let html = '';
+        lecturers.forEach(([lecId, info]) => {
+            const globalData = allLoading.find(l => String(l.id || l.lecturer_id) === String(lecId));
+            const totalHours = globalData ? (globalData.total_hours || globalData.hours || 0) : info.hours;
+            const totalPct = Math.min(totalHours / maxHours * 100, 100);
+            const thisPct = Math.min(info.hours / maxHours * 100, 100);
+
+            html += `
+                <div class="lecturer-loading-row">
+                    <div class="ll-name">${escHtml(info.name)}</div>
+                    <div class="ll-bar-wrap">
+                        <div class="ll-bar-total" style="width:${totalPct}%"></div>
+                        <div class="ll-bar-highlight" style="width:${thisPct}%"></div>
+                    </div>
+                    <div class="ll-hours">${info.hours}h / ${totalHours}h</div>
+                </div>
+            `;
+        });
+        return html;
+    }
+
+    function renderResitsTab(resits) {
+        if (resits.length === 0) return '<p style="color:#98a2b3;padding:16px 0;">No pending resits</p>';
+
+        let html = `<div style="display:flex;gap:12px;padding:8px 0;border-bottom:2px solid #e0e0e0;font-size:12px;font-weight:700;color:#667085;">
+            <span class="resit-module">Module</span>
+            <span class="resit-student">Student</span>
+            <span class="resit-lecturer">Original Lecturer</span>
+            <span class="resit-examiner">Examiner</span>
+            <span style="width:80px">Status</span>
+        </div>`;
+
+        resits.forEach(r => {
+            const status = r.status || 'pending';
+            html += `
+                <div class="resit-row">
+                    <span class="resit-module">${escHtml(r.module_name || r.module || 'N/A')}</span>
+                    <span class="resit-student">${escHtml(r.student_name || r.student || 'N/A')}</span>
+                    <span class="resit-lecturer">${escHtml(r.lecturer_name || r.original_lecturer || 'N/A')}</span>
+                    <span class="resit-examiner">${escHtml(r.examiner_name || r.examiner || 'Not assigned')}</span>
+                    <span style="width:80px"><span class="badge badge-${status}">${status}</span></span>
+                </div>
+            `;
+        });
+        return html;
+    }
+
+    function escHtml(s) {
+        if (!s) return '';
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    initCourses();
+</script>
+{% endblock %}

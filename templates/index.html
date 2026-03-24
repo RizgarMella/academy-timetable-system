@@ -1,0 +1,362 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block page_title %}Dashboard{% endblock %}
+
+{% block page_actions %}
+<label for="yearSelect" style="font-size:13px;font-weight:600;color:#667085;">Academic Year:</label>
+<select id="yearSelect" onchange="loadDashboard()"></select>
+{% endblock %}
+
+{% block content %}
+<style>
+    .stats-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    .stat-card {
+        background: #fff;
+        border-radius: 10px;
+        border: 1px solid #e8e8e8;
+        padding: 20px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .stat-card .stat-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #667085;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+    }
+    .stat-card .stat-value {
+        font-size: 32px;
+        font-weight: 800;
+        color: #1a1a2e;
+    }
+    .stat-card .stat-icon {
+        float: right;
+        font-size: 28px;
+        opacity: 0.3;
+    }
+    .two-col-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    .balance-gauge {
+        text-align: center;
+        padding: 30px 20px;
+    }
+    .gauge-value {
+        font-size: 64px;
+        font-weight: 800;
+    }
+    .gauge-label {
+        font-size: 14px;
+        color: #667085;
+        margin-top: 4px;
+    }
+    .gauge-bar {
+        width: 100%;
+        height: 8px;
+        background: #e8e8e8;
+        border-radius: 4px;
+        margin-top: 16px;
+        overflow: hidden;
+    }
+    .gauge-bar-fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.6s ease;
+    }
+    .session-list { list-style: none; }
+    .session-list li {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 0;
+        border-bottom: 1px solid #f0f0f0;
+        font-size: 13px;
+    }
+    .session-list li:last-child { border-bottom: none; }
+    .session-date {
+        background: #f0f2f5;
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-weight: 600;
+        font-size: 11px;
+        white-space: nowrap;
+        color: #4361ee;
+    }
+    .session-info { flex: 1; }
+    .session-info .module-name { font-weight: 600; color: #1a1a2e; }
+    .session-info .course-name { color: #667085; font-size: 12px; }
+    .quick-actions {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    .quick-action {
+        text-decoration: none;
+        color: inherit;
+        background: #fff;
+        border-radius: 10px;
+        border: 1px solid #e8e8e8;
+        padding: 24px;
+        text-align: center;
+        transition: all 0.2s;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .quick-action:hover {
+        border-color: #4361ee;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(67,97,238,0.12);
+    }
+    .quick-action .qa-icon { font-size: 32px; margin-bottom: 8px; }
+    .quick-action .qa-title { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+    .quick-action .qa-desc { font-size: 12px; color: #667085; }
+    .activity-list { list-style: none; }
+    .activity-list li {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 0;
+        border-bottom: 1px solid #f0f0f0;
+        font-size: 13px;
+    }
+    .activity-list li:last-child { border-bottom: none; }
+    .activity-status {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+</style>
+
+<!-- Stats Row -->
+<div class="stats-row">
+    <div class="stat-card">
+        <span class="stat-icon">&#128218;</span>
+        <div class="stat-label">Total Courses</div>
+        <div class="stat-value" id="statCourses">-</div>
+    </div>
+    <div class="stat-card">
+        <span class="stat-icon">&#128196;</span>
+        <div class="stat-label">Active Course Runs</div>
+        <div class="stat-value" id="statCourseRuns">-</div>
+    </div>
+    <div class="stat-card">
+        <span class="stat-icon">&#128100;</span>
+        <div class="stat-label">Total Lecturers</div>
+        <div class="stat-value" id="statLecturers">-</div>
+    </div>
+    <div class="stat-card">
+        <span class="stat-icon">&#128221;</span>
+        <div class="stat-label">Pending Resits</div>
+        <div class="stat-value" id="statResits">-</div>
+    </div>
+</div>
+
+<!-- Balance + Upcoming -->
+<div class="two-col-row">
+    <div class="card balance-gauge">
+        <div class="card-title">Balance Score</div>
+        <div class="gauge-value" id="balanceValue">-</div>
+        <div class="gauge-label">Lecturer workload balance</div>
+        <div class="gauge-bar">
+            <div class="gauge-bar-fill" id="balanceBar" style="width:0%"></div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-title">Upcoming Sessions</div>
+        <ul class="session-list" id="upcomingSessions">
+            <li style="color:#999">Loading...</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="quick-actions">
+    <a href="/gantt" class="quick-action">
+        <div class="qa-icon">&#128202;</div>
+        <div class="qa-title">Gantt Chart</div>
+        <div class="qa-desc">View and manage the full schedule</div>
+    </a>
+    <a href="/solver" class="quick-action">
+        <div class="qa-icon">&#9889;</div>
+        <div class="qa-title">Run Solver</div>
+        <div class="qa-desc">Auto-generate optimal timetable</div>
+    </a>
+    <a href="/courses" class="quick-action">
+        <div class="qa-icon">&#128218;</div>
+        <div class="qa-title">Course Manager</div>
+        <div class="qa-desc">Manage courses and course runs</div>
+    </a>
+</div>
+
+<!-- Recent Activity -->
+<div class="card">
+    <div class="card-title">Recent Activity</div>
+    <ul class="activity-list" id="recentActivity">
+        <li style="color:#999">Loading...</li>
+    </ul>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let currentYearId = null;
+
+    async function init() {
+        try {
+            const years = await fetch('/api/academic-years').then(r => r.json());
+            const sel = document.getElementById('yearSelect');
+            sel.innerHTML = '';
+            if (Array.isArray(years) && years.length > 0) {
+                years.forEach(y => {
+                    const opt = document.createElement('option');
+                    opt.value = y.id;
+                    opt.textContent = y.name || y.label || `${y.start_year}/${y.end_year}`;
+                    if (y.is_current) opt.selected = true;
+                    sel.appendChild(opt);
+                });
+                currentYearId = sel.value;
+                await loadDashboard();
+            } else {
+                sel.innerHTML = '<option>No years found</option>';
+            }
+        } catch (err) {
+            console.error('Failed to load academic years:', err);
+        }
+    }
+
+    async function loadDashboard() {
+        const yearId = document.getElementById('yearSelect').value;
+        currentYearId = yearId;
+
+        const [courses, courseRuns, lecturers, resits, loading] = await Promise.allSettled([
+            fetch('/api/courses').then(r => r.json()),
+            fetch(`/api/course-runs?year_id=${yearId}`).then(r => r.json()),
+            fetch('/api/lecturers').then(r => r.json()),
+            fetch('/api/resits?status=pending').then(r => r.json()),
+            fetch(`/api/schedule/loading?year_id=${yearId}`).then(r => r.json())
+        ]);
+
+        // Stats cards
+        const coursesData = courses.status === 'fulfilled' ? courses.value : [];
+        const courseRunsData = courseRuns.status === 'fulfilled' ? courseRuns.value : [];
+        const lecturersData = lecturers.status === 'fulfilled' ? lecturers.value : [];
+        const resitsData = resits.status === 'fulfilled' ? resits.value : [];
+        const loadingData = loading.status === 'fulfilled' ? loading.value : {};
+
+        document.getElementById('statCourses').textContent = Array.isArray(coursesData) ? coursesData.length : '0';
+        document.getElementById('statCourseRuns').textContent = Array.isArray(courseRunsData) ? courseRunsData.filter(r => r.status === 'active' || r.status === 'confirmed' || r.status === 'proposal').length : '0';
+        document.getElementById('statLecturers').textContent = Array.isArray(lecturersData) ? lecturersData.length : '0';
+        document.getElementById('statResits').textContent = Array.isArray(resitsData) ? resitsData.length : '0';
+
+        // Balance score
+        const balanceScore = loadingData.balance_score !== undefined ? loadingData.balance_score : (loadingData.balanceScore !== undefined ? loadingData.balanceScore : null);
+        const balanceEl = document.getElementById('balanceValue');
+        const barEl = document.getElementById('balanceBar');
+        if (balanceScore !== null && balanceScore !== undefined) {
+            const score = parseFloat(balanceScore);
+            balanceEl.textContent = score.toFixed(2);
+            barEl.style.width = `${Math.round(score * 100)}%`;
+            if (score >= 0.7) {
+                balanceEl.style.color = '#2ec4b6';
+                barEl.style.background = '#2ec4b6';
+            } else if (score >= 0.4) {
+                balanceEl.style.color = '#f4a261';
+                barEl.style.background = '#f4a261';
+            } else {
+                balanceEl.style.color = '#e63946';
+                barEl.style.background = '#e63946';
+            }
+        } else {
+            balanceEl.textContent = 'N/A';
+            barEl.style.width = '0%';
+        }
+
+        // Upcoming sessions
+        const sessionsEl = document.getElementById('upcomingSessions');
+        const today = new Date().toISOString().split('T')[0];
+        let sessions = [];
+        if (Array.isArray(courseRunsData)) {
+            for (const cr of courseRunsData) {
+                try {
+                    const schedResp = await fetch(`/api/schedule?course_run_id=${cr.id}`);
+                    const sched = await schedResp.json();
+                    if (Array.isArray(sched)) {
+                        sched.forEach(s => {
+                            if (s.date >= today || s.start_date >= today) {
+                                sessions.push({
+                                    date: s.date || s.start_date,
+                                    module: s.module_name || s.module || 'Session',
+                                    course: cr.course_name || cr.label || cr.cohort_label || `Run #${cr.id}`
+                                });
+                            }
+                        });
+                    }
+                } catch (e) { /* skip */ }
+            }
+        }
+        sessions.sort((a, b) => a.date.localeCompare(b.date));
+        const next5 = sessions.slice(0, 5);
+        if (next5.length > 0) {
+            sessionsEl.innerHTML = next5.map(s => `
+                <li>
+                    <span class="session-date">${formatDate(s.date)}</span>
+                    <div class="session-info">
+                        <div class="module-name">${escHtml(s.module)}</div>
+                        <div class="course-name">${escHtml(s.course)}</div>
+                    </div>
+                </li>
+            `).join('');
+        } else {
+            sessionsEl.innerHTML = '<li style="color:#999">No upcoming sessions</li>';
+        }
+
+        // Recent Activity
+        const activityEl = document.getElementById('recentActivity');
+        if (Array.isArray(courseRunsData) && courseRunsData.length > 0) {
+            const recent = courseRunsData.slice(0, 8);
+            activityEl.innerHTML = recent.map(cr => {
+                const status = cr.status || 'unknown';
+                const colors = { proposal: '#f4a261', confirmed: '#2ec4b6', active: '#4361ee', completed: '#98a2b3' };
+                const dotColor = colors[status] || '#ccc';
+                const label = cr.cohort_label || cr.course_name || cr.label || `Course Run #${cr.id}`;
+                return `
+                    <li>
+                        <span class="activity-status" style="background:${dotColor}"></span>
+                        <span style="flex:1;font-weight:500">${escHtml(label)}</span>
+                        <span class="badge badge-${status}">${status}</span>
+                    </li>
+                `;
+            }).join('');
+        } else {
+            activityEl.innerHTML = '<li style="color:#999">No recent activity</li>';
+        }
+    }
+
+    function formatDate(d) {
+        if (!d) return '';
+        const dt = new Date(d + 'T00:00:00');
+        return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+    }
+
+    function escHtml(s) {
+        if (!s) return '';
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    init();
+</script>
+{% endblock %}
