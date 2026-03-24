@@ -17,7 +17,7 @@ class Lecturer(Base):
 
     qualifications = relationship('LecturerQualification', back_populates='lecturer')
     availability = relationship('LecturerAvailability', back_populates='lecturer')
-    scheduled_sessions = relationship('ScheduledSession', back_populates='lecturer')
+    scheduled_sessions = relationship('ScheduledSession', foreign_keys='ScheduledSession.lecturer_id', back_populates='lecturer')
 
     def to_dict(self):
         return {

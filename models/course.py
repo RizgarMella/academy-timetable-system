@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Date, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, Date, Float, ForeignKey
 from sqlalchemy.orm import relationship
 from models import Base
 
@@ -32,7 +32,8 @@ class Course(Base):
     total_weeks = Column(Integer, nullable=False)
     max_concurrent_runs = Column(Integer, default=2)
 
-    modules = relationship('Module', back_populates='course', order_by='Module.sequence_order')
+    modules = relationship('Module', back_populates='course', order_by='Module.sequence_order',
+                           cascade='all, delete-orphan')
     course_runs = relationship('CourseRun', back_populates='course')
 
     def to_dict(self, include_modules=False):
@@ -63,8 +64,21 @@ class Module(Base):
     max_class_size = Column(Integer, default=30)
     exam_duration_hours = Column(Integer, nullable=True)
 
+    # Delivery mode: 'single' (1 lecturer), 'team' (multiple simultaneously),
+    # 'split' (handover between lecturers sequentially)
+    delivery_mode = Column(String(20), default='single')
+    # For team teaching: how many lecturers teach simultaneously
+    team_size = Column(Integer, default=1)
+    # For split/handover: how many lecturers to divide the module between
+    split_count = Column(Integer, default=1)
+    # For split: minimum hours per lecturer segment before handover
+    min_segment_hours = Column(Integer, nullable=True)
+
     course = relationship('Course', back_populates='modules')
-    qualifications = relationship('LecturerQualification', back_populates='module')
+    qualifications = relationship('LecturerQualification', back_populates='module',
+                                  cascade='all, delete-orphan')
+    rules = relationship('ModuleRule', back_populates='module',
+                         cascade='all, delete-orphan')
 
     def to_dict(self):
         return {
@@ -77,6 +91,50 @@ class Module(Base):
             'requires_lab': self.requires_lab,
             'max_class_size': self.max_class_size,
             'exam_duration_hours': self.exam_duration_hours,
+            'delivery_mode': self.delivery_mode or 'single',
+            'team_size': self.team_size or 1,
+            'split_count': self.split_count or 1,
+            'min_segment_hours': self.min_segment_hours,
+            'qualified_lecturers': [q.to_dict() for q in self.qualifications] if self.qualifications else [],
+            'rules': [r.to_dict() for r in self.rules] if self.rules else [],
+        }
+
+
+class ModuleRule(Base):
+    """Arbitrary constraints on module delivery.
+
+    rule_type values:
+      - 'consecutive_days'  : module must be taught on consecutive days (value ignored)
+      - 'max_daily_hours'   : max hours of this module per day (value = integer)
+      - 'requires_equipment': specific equipment needed (value = description)
+      - 'prerequisite'      : must complete another module first (value = module_id)
+      - 'corequisite'       : must run alongside another module (value = module_id)
+      - 'no_friday'         : cannot be scheduled on Fridays
+      - 'morning_only'      : must be in slots 0-3 (09:00-13:00)
+      - 'afternoon_only'    : must be in slots 4-7 (13:00-17:00)
+      - 'same_lecturer_as'  : must share lecturer with another module (value = module_id)
+      - 'different_lecturer_as': must NOT share lecturer (value = module_id)
+      - 'custom'            : free-text constraint description
+    """
+    __tablename__ = 'module_rules'
+
+    id = Column(Integer, primary_key=True)
+    module_id = Column(Integer, ForeignKey('modules.id'), nullable=False)
+    rule_type = Column(String(50), nullable=False)
+    value = Column(String(200), nullable=True)
+    description = Column(String(300), nullable=True)
+    enabled = Column(Boolean, default=True)
+
+    module = relationship('Module', back_populates='rules')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'module_id': self.module_id,
+            'rule_type': self.rule_type,
+            'value': self.value,
+            'description': self.description,
+            'enabled': self.enabled,
         }
 
 

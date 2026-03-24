@@ -2,7 +2,7 @@ from datetime import date as date_type
 
 from flask import Blueprint, jsonify, request
 from models import (
-    get_session, Lecturer, Course, Module, CourseRun, AcademicYear,
+    get_session, Lecturer, Course, Module, ModuleRule, CourseRun, AcademicYear,
     Classroom, ScheduledSession, LecturerQualification, Resit, Rule,
 )
 
@@ -233,6 +233,10 @@ def create_module():
             requires_lab=data.get('requires_lab', False),
             max_class_size=data.get('max_class_size', 30),
             exam_duration_hours=data.get('exam_duration_hours'),
+            delivery_mode=data.get('delivery_mode', 'single'),
+            team_size=data.get('team_size', 1),
+            split_count=data.get('split_count', 1),
+            min_segment_hours=data.get('min_segment_hours'),
         )
         session.add(mod)
         session.commit()
@@ -253,7 +257,8 @@ def update_module(module_id):
             return jsonify({'error': 'Module not found'}), 404
         data = request.get_json()
         for field in ('code', 'name', 'duration_hours', 'sequence_order',
-                      'requires_lab', 'max_class_size', 'exam_duration_hours'):
+                      'requires_lab', 'max_class_size', 'exam_duration_hours',
+                      'delivery_mode', 'team_size', 'split_count', 'min_segment_hours'):
             if field in data:
                 setattr(mod, field, data[field])
         session.commit()
@@ -469,10 +474,146 @@ def list_qualifications():
     try:
         query = session.query(LecturerQualification)
         lecturer_id = request.args.get('lecturer_id', type=int)
+        module_id = request.args.get('module_id', type=int)
         if lecturer_id is not None:
             query = query.filter_by(lecturer_id=lecturer_id)
+        if module_id is not None:
+            query = query.filter_by(module_id=module_id)
         quals = query.all()
         return jsonify([q.to_dict() for q in quals])
+    finally:
+        session.close()
+
+
+@api_data_bp.route('/qualifications', methods=['POST'])
+def create_qualification():
+    session = get_session()
+    try:
+        data = request.get_json()
+        qual = LecturerQualification(
+            lecturer_id=data['lecturer_id'],
+            module_id=data['module_id'],
+            proficiency_level=data.get('proficiency_level', 'primary'),
+            can_examine=data.get('can_examine', True),
+        )
+        session.add(qual)
+        session.commit()
+        return jsonify(qual.to_dict()), 201
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+@api_data_bp.route('/qualifications/<int:qual_id>', methods=['PUT'])
+def update_qualification(qual_id):
+    session = get_session()
+    try:
+        qual = session.query(LecturerQualification).get(qual_id)
+        if not qual:
+            return jsonify({'error': 'Qualification not found'}), 404
+        data = request.get_json()
+        for field in ('proficiency_level', 'can_examine'):
+            if field in data:
+                setattr(qual, field, data[field])
+        session.commit()
+        return jsonify(qual.to_dict())
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+@api_data_bp.route('/qualifications/<int:qual_id>', methods=['DELETE'])
+def delete_qualification(qual_id):
+    session = get_session()
+    try:
+        qual = session.query(LecturerQualification).get(qual_id)
+        if not qual:
+            return jsonify({'error': 'Qualification not found'}), 404
+        session.delete(qual)
+        session.commit()
+        return jsonify({'deleted': True})
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+# ---------- Module Rules ----------
+
+@api_data_bp.route('/module-rules')
+def list_module_rules():
+    session = get_session()
+    try:
+        query = session.query(ModuleRule)
+        module_id = request.args.get('module_id', type=int)
+        if module_id is not None:
+            query = query.filter_by(module_id=module_id)
+        rules = query.all()
+        return jsonify([r.to_dict() for r in rules])
+    finally:
+        session.close()
+
+
+@api_data_bp.route('/module-rules', methods=['POST'])
+def create_module_rule():
+    session = get_session()
+    try:
+        data = request.get_json()
+        rule = ModuleRule(
+            module_id=data['module_id'],
+            rule_type=data['rule_type'],
+            value=data.get('value'),
+            description=data.get('description', ''),
+            enabled=data.get('enabled', True),
+        )
+        session.add(rule)
+        session.commit()
+        return jsonify(rule.to_dict()), 201
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+@api_data_bp.route('/module-rules/<int:rule_id>', methods=['PUT'])
+def update_module_rule(rule_id):
+    session = get_session()
+    try:
+        rule = session.query(ModuleRule).get(rule_id)
+        if not rule:
+            return jsonify({'error': 'Module rule not found'}), 404
+        data = request.get_json()
+        for field in ('rule_type', 'value', 'description', 'enabled'):
+            if field in data:
+                setattr(rule, field, data[field])
+        session.commit()
+        return jsonify(rule.to_dict())
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+@api_data_bp.route('/module-rules/<int:rule_id>', methods=['DELETE'])
+def delete_module_rule(rule_id):
+    session = get_session()
+    try:
+        rule = session.query(ModuleRule).get(rule_id)
+        if not rule:
+            return jsonify({'error': 'Module rule not found'}), 404
+        session.delete(rule)
+        session.commit()
+        return jsonify({'deleted': True})
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 

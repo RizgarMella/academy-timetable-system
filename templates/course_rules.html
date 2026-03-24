@@ -1,0 +1,530 @@
+{% extends "base.html" %}
+
+{% block title %}Course Rules{% endblock %}
+{% block page_title %}Course Rules &amp; Constraints{% endblock %}
+
+{% block content %}
+<style>
+    .rules-layout { display: flex; gap: 0; height: calc(100vh - 140px); }
+    .rules-sidebar {
+        width: 280px; min-width: 280px; border-right: 1px solid #e0e0e0;
+        overflow-y: auto; background: #fafbfc;
+    }
+    .rules-main { flex: 1; overflow-y: auto; padding: 24px; }
+
+    .sidebar-section { padding: 12px; border-bottom: 1px solid #e8e8e8; }
+    .sidebar-section h4 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #667085; margin-bottom: 8px; }
+    .sidebar-course {
+        padding: 10px 12px; cursor: pointer; border-bottom: 1px solid #f0f0f0;
+        display: flex; align-items: center; gap: 8px; transition: background 0.15s;
+    }
+    .sidebar-course:hover { background: #f0f2f5; }
+    .sidebar-course.active { background: #e8f0fe; border-left: 3px solid #4361ee; }
+    .sidebar-course .sc-code { background: #4361ee; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; }
+    .sidebar-course .sc-name { flex: 1; font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sidebar-course .sc-count { font-size: 11px; color: #98a2b3; }
+
+    /* Module cards */
+    .module-list { display: flex; flex-direction: column; gap: 16px; }
+    .module-card {
+        background: #fff; border-radius: 10px; border: 1px solid #e8e8e8;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04); overflow: hidden;
+    }
+    .module-card-header {
+        display: flex; align-items: center; gap: 12px; padding: 16px 20px;
+        border-bottom: 1px solid #f0f0f0; cursor: pointer;
+    }
+    .module-card-header:hover { background: #fafbfc; }
+    .mc-order { background: #f0f2f5; color: #667085; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+    .mc-code { font-weight: 700; font-size: 14px; color: #1a1a2e; }
+    .mc-name { flex: 1; font-size: 13px; color: #667085; }
+    .mc-badges { display: flex; gap: 6px; }
+    .mc-badge { padding: 3px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+    .mc-badge-hours { background: #e8f0fe; color: #1a73e8; }
+    .mc-badge-lab { background: #e6f4ea; color: #137333; }
+    .mc-badge-team { background: #fce8e6; color: #c5221f; }
+    .mc-badge-split { background: #fef7e0; color: #b06000; }
+    .mc-expand { font-size: 12px; color: #98a2b3; transition: transform 0.2s; }
+    .mc-expand.open { transform: rotate(90deg); }
+
+    .module-card-body { display: none; padding: 0; }
+    .module-card-body.open { display: block; }
+    .mc-section { padding: 16px 20px; border-bottom: 1px solid #f0f0f0; }
+    .mc-section:last-child { border-bottom: none; }
+    .mc-section-title { font-size: 12px; font-weight: 700; color: #667085; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+
+    /* Delivery mode selector */
+    .delivery-options { display: flex; gap: 8px; margin-bottom: 12px; }
+    .delivery-opt {
+        flex: 1; padding: 12px; border: 2px solid #e8e8e8; border-radius: 8px;
+        cursor: pointer; text-align: center; transition: all 0.2s;
+    }
+    .delivery-opt:hover { border-color: #b0c4ff; }
+    .delivery-opt.selected { border-color: #4361ee; background: #f0f4ff; }
+    .delivery-opt .do-icon { font-size: 24px; margin-bottom: 4px; }
+    .delivery-opt .do-label { font-size: 12px; font-weight: 700; color: #1a1a2e; }
+    .delivery-opt .do-desc { font-size: 10px; color: #667085; margin-top: 2px; }
+
+    /* Qualification table */
+    .qual-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .qual-table th { text-align: left; padding: 8px; font-size: 11px; font-weight: 700; color: #667085; border-bottom: 2px solid #e0e0e0; }
+    .qual-table td { padding: 8px; border-bottom: 1px solid #f0f0f0; }
+    .qual-table tr:hover td { background: #fafbff; }
+
+    /* Rule chips */
+    .rule-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .rule-chip {
+        display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px;
+        background: #f0f2f5; border-radius: 16px; font-size: 12px;
+    }
+    .rule-chip-remove { cursor: pointer; color: #e63946; font-weight: 700; font-size: 14px; }
+    .rule-chip-disabled { opacity: 0.5; text-decoration: line-through; }
+
+    .empty-state { text-align: center; padding: 40px; color: #98a2b3; font-size: 14px; }
+    .inline-form { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+    .inline-form .form-group { margin-bottom: 0; }
+</style>
+
+<div class="rules-layout">
+    <div class="rules-sidebar">
+        <div class="sidebar-section">
+            <h4>Courses</h4>
+            <input type="text" id="courseSearch" placeholder="Search courses..." style="width:100%;padding:6px 10px;font-size:12px;margin-bottom:8px;" oninput="filterSidebar()">
+        </div>
+        <div id="courseListSidebar"></div>
+    </div>
+    <div class="rules-main" id="rulesMain">
+        <div class="empty-state">Select a course from the sidebar to configure its modules, qualifications, and delivery rules.</div>
+    </div>
+</div>
+
+<!-- Add Qualification Modal -->
+<div class="modal-overlay" id="addQualModal">
+    <div class="modal" style="width:420px;">
+        <div class="modal-header">
+            <h2>Add Qualified Lecturer</h2>
+            <button class="modal-close" onclick="closeQualModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="qualModuleId">
+            <div class="form-group">
+                <label>Lecturer</label>
+                <select id="qualLecturerId" style="width:100%;"></select>
+            </div>
+            <div class="form-group">
+                <label>Proficiency</label>
+                <select id="qualProficiency" style="width:100%;">
+                    <option value="primary">Primary</option>
+                    <option value="secondary">Secondary</option>
+                    <option value="emergency">Emergency</option>
+                </select>
+            </div>
+            <div class="form-check">
+                <input type="checkbox" id="qualCanExamine" checked>
+                <label for="qualCanExamine">Can Examine</label>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeQualModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveQualification()">Add</button>
+        </div>
+    </div>
+</div>
+
+<!-- Add Rule Modal -->
+<div class="modal-overlay" id="addRuleModal">
+    <div class="modal" style="width:480px;">
+        <div class="modal-header">
+            <h2>Add Module Rule</h2>
+            <button class="modal-close" onclick="closeRuleModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="ruleModuleId">
+            <div class="form-group">
+                <label>Rule Type</label>
+                <select id="ruleType" style="width:100%;" onchange="updateRuleValueHint()">
+                    <option value="consecutive_days">Must be consecutive days</option>
+                    <option value="max_daily_hours">Max hours per day</option>
+                    <option value="morning_only">Morning only (09:00-13:00)</option>
+                    <option value="afternoon_only">Afternoon only (13:00-17:00)</option>
+                    <option value="no_friday">No Fridays</option>
+                    <option value="requires_equipment">Requires specific equipment</option>
+                    <option value="same_lecturer_as">Same lecturer as another module</option>
+                    <option value="different_lecturer_as">Different lecturer from another module</option>
+                    <option value="custom">Custom constraint</option>
+                </select>
+            </div>
+            <div class="form-group" id="ruleValueGroup">
+                <label id="ruleValueLabel">Value</label>
+                <input type="text" id="ruleValue" placeholder="">
+            </div>
+            <div class="form-group">
+                <label>Description (optional)</label>
+                <input type="text" id="ruleDescription" placeholder="Human-readable description">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeRuleModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveModuleRule()">Add Rule</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let allCourses = [];
+    let allLecturers = [];
+    let selectedCourseId = null;
+    let courseModuleData = {}; // cache: courseId -> full course with modules
+
+    async function init() {
+        const [courses, lecturers] = await Promise.all([
+            fetch('/api/courses').then(r => r.json()).catch(() => []),
+            fetch('/api/lecturers').then(r => r.json()).catch(() => []),
+        ]);
+        allCourses = courses;
+        allLecturers = lecturers;
+        renderSidebar();
+    }
+
+    function filterSidebar() {
+        renderSidebar();
+    }
+
+    function renderSidebar() {
+        const search = (document.getElementById('courseSearch').value || '').toLowerCase();
+        const filtered = allCourses.filter(c =>
+            (c.name || '').toLowerCase().includes(search) ||
+            (c.code || '').toLowerCase().includes(search)
+        );
+        document.getElementById('courseListSidebar').innerHTML = filtered.map(c => `
+            <div class="sidebar-course ${c.id === selectedCourseId ? 'active' : ''}" onclick="selectCourse(${c.id})">
+                <span class="sc-code">${esc(c.code)}</span>
+                <span class="sc-name">${esc(c.name)}</span>
+                <span class="sc-count">${c.module_count || 0} mod</span>
+            </div>
+        `).join('');
+    }
+
+    async function selectCourse(courseId) {
+        selectedCourseId = courseId;
+        renderSidebar();
+
+        const main = document.getElementById('rulesMain');
+        main.innerHTML = '<div class="empty-state"><div class="loading-spinner"></div></div>';
+
+        try {
+            const course = await fetch(`/api/courses/${courseId}`).then(r => r.json());
+            courseModuleData[courseId] = course;
+            renderCourseRules(course);
+        } catch (err) {
+            main.innerHTML = '<div class="empty-state">Failed to load course.</div>';
+        }
+    }
+
+    function renderCourseRules(course) {
+        const main = document.getElementById('rulesMain');
+        const modules = course.modules || [];
+
+        let html = `
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+                <div>
+                    <h2 style="font-size:20px;font-weight:700;">${esc(course.code)} - ${esc(course.name)}</h2>
+                    <p style="font-size:13px;color:#667085;margin-top:4px;">${modules.length} modules | ${course.total_weeks} weeks | Max ${course.max_concurrent_runs} concurrent runs</p>
+                </div>
+            </div>
+            <div class="module-list">
+        `;
+
+        if (modules.length === 0) {
+            html += '<div class="empty-state">No modules defined. Add modules in the Course Manager.</div>';
+        }
+
+        modules.forEach((mod, idx) => {
+            const mode = mod.delivery_mode || 'single';
+            const quals = mod.qualified_lecturers || [];
+            const rules = mod.rules || [];
+
+            html += `
+                <div class="module-card" id="mc-${mod.id}">
+                    <div class="module-card-header" onclick="toggleModule(${mod.id})">
+                        <span class="mc-order">${mod.sequence_order || idx + 1}</span>
+                        <span class="mc-code">${esc(mod.code)}</span>
+                        <span class="mc-name">${esc(mod.name)}</span>
+                        <div class="mc-badges">
+                            <span class="mc-badge mc-badge-hours">${mod.duration_hours}h</span>
+                            ${mod.requires_lab ? '<span class="mc-badge mc-badge-lab">Lab</span>' : ''}
+                            ${mode === 'team' ? `<span class="mc-badge mc-badge-team">Team x${mod.team_size || 2}</span>` : ''}
+                            ${mode === 'split' ? `<span class="mc-badge mc-badge-split">Split x${mod.split_count || 2}</span>` : ''}
+                            <span class="mc-badge" style="background:#f0f2f5;color:#667085;">${quals.length} lecturers</span>
+                            ${rules.length > 0 ? `<span class="mc-badge" style="background:#fce8e6;color:#c5221f;">${rules.length} rules</span>` : ''}
+                        </div>
+                        <span class="mc-expand" id="mcx-${mod.id}">&#9654;</span>
+                    </div>
+                    <div class="module-card-body" id="mcb-${mod.id}">
+                        ${renderModuleBody(mod)}
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        main.innerHTML = html;
+    }
+
+    function renderModuleBody(mod) {
+        const mode = mod.delivery_mode || 'single';
+        const quals = mod.qualified_lecturers || [];
+        const rules = mod.rules || [];
+
+        let html = '';
+
+        // --- Delivery Mode Section ---
+        html += `<div class="mc-section">
+            <div class="mc-section-title">Delivery Mode</div>
+            <div class="delivery-options">
+                <div class="delivery-opt ${mode === 'single' ? 'selected' : ''}" onclick="setDeliveryMode(${mod.id}, 'single')">
+                    <div class="do-icon">&#128100;</div>
+                    <div class="do-label">Single</div>
+                    <div class="do-desc">One lecturer teaches the whole module</div>
+                </div>
+                <div class="delivery-opt ${mode === 'team' ? 'selected' : ''}" onclick="setDeliveryMode(${mod.id}, 'team')">
+                    <div class="do-icon">&#128101;</div>
+                    <div class="do-label">Team Teaching</div>
+                    <div class="do-desc">Multiple lecturers simultaneously</div>
+                </div>
+                <div class="delivery-opt ${mode === 'split' ? 'selected' : ''}" onclick="setDeliveryMode(${mod.id}, 'split')">
+                    <div class="do-icon">&#128260;</div>
+                    <div class="do-label">Split / Handover</div>
+                    <div class="do-desc">Divide hours between lecturers</div>
+                </div>
+            </div>`;
+
+        if (mode === 'team') {
+            html += `<div class="inline-form" style="margin-top:8px;">
+                <div class="form-group"><label>Team Size</label>
+                    <input type="number" value="${mod.team_size || 2}" min="2" max="5" style="width:80px;" onchange="updateModuleField(${mod.id}, 'team_size', parseInt(this.value))">
+                </div>
+            </div>`;
+        } else if (mode === 'split') {
+            html += `<div class="inline-form" style="margin-top:8px;">
+                <div class="form-group"><label>Split Between</label>
+                    <input type="number" value="${mod.split_count || 2}" min="2" max="5" style="width:80px;" onchange="updateModuleField(${mod.id}, 'split_count', parseInt(this.value))">
+                    <span style="font-size:12px;color:#667085;"> lecturers</span>
+                </div>
+                <div class="form-group"><label>Min Hours/Segment</label>
+                    <input type="number" value="${mod.min_segment_hours || ''}" min="1" style="width:80px;" placeholder="Auto" onchange="updateModuleField(${mod.id}, 'min_segment_hours', this.value ? parseInt(this.value) : null)">
+                </div>
+            </div>`;
+        }
+        html += '</div>';
+
+        // --- Module Properties Section ---
+        html += `<div class="mc-section">
+            <div class="mc-section-title">Properties</div>
+            <div class="inline-form">
+                <div class="form-group"><label>Duration (hours)</label>
+                    <input type="number" value="${mod.duration_hours}" min="1" style="width:80px;" onchange="updateModuleField(${mod.id}, 'duration_hours', parseInt(this.value))">
+                </div>
+                <div class="form-group"><label>Max Class Size</label>
+                    <input type="number" value="${mod.max_class_size || 30}" min="1" style="width:80px;" onchange="updateModuleField(${mod.id}, 'max_class_size', parseInt(this.value))">
+                </div>
+                <div class="form-group"><label>Exam Hours</label>
+                    <input type="number" value="${mod.exam_duration_hours || ''}" min="1" style="width:80px;" placeholder="None" onchange="updateModuleField(${mod.id}, 'exam_duration_hours', this.value ? parseInt(this.value) : null)">
+                </div>
+                <div class="form-check" style="padding-top:18px;">
+                    <input type="checkbox" ${mod.requires_lab ? 'checked' : ''} onchange="updateModuleField(${mod.id}, 'requires_lab', this.checked)">
+                    <label>Requires Lab</label>
+                </div>
+            </div>
+        </div>`;
+
+        // --- Qualified Lecturers Section ---
+        html += `<div class="mc-section">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+                <div class="mc-section-title" style="margin-bottom:0;">Qualified Lecturers</div>
+                <button class="btn btn-sm btn-primary" onclick="openQualModal(${mod.id})">+ Add</button>
+            </div>`;
+
+        if (quals.length === 0) {
+            html += '<p style="color:#98a2b3;font-size:12px;margin-top:8px;">No lecturers assigned. The solver cannot schedule this module without qualified lecturers.</p>';
+        } else {
+            html += '<table class="qual-table" style="margin-top:8px;"><tr><th>Lecturer</th><th>Proficiency</th><th>Can Examine</th><th></th></tr>';
+            quals.forEach(q => {
+                const profColors = { primary: '#2ec4b6', secondary: '#f4a261', emergency: '#e63946' };
+                const profColor = profColors[q.proficiency_level] || '#667085';
+                html += `<tr>
+                    <td style="font-weight:600;">${esc(q.lecturer_name || 'Lecturer #' + q.lecturer_id)}</td>
+                    <td><span style="color:${profColor};font-weight:600;text-transform:capitalize;">${q.proficiency_level}</span></td>
+                    <td>${q.can_examine ? '&#9989; Yes' : '&#10060; No'}</td>
+                    <td style="text-align:right;">
+                        <button class="btn btn-sm btn-danger" style="padding:2px 6px;font-size:10px;" onclick="deleteQual(${q.id}, ${mod.id})">Remove</button>
+                    </td>
+                </tr>`;
+            });
+            html += '</table>';
+        }
+        html += '</div>';
+
+        // --- Module Rules Section ---
+        html += `<div class="mc-section">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+                <div class="mc-section-title" style="margin-bottom:0;">Scheduling Rules</div>
+                <button class="btn btn-sm btn-outline" onclick="openRuleModal(${mod.id})">+ Add Rule</button>
+            </div>`;
+
+        if (rules.length > 0) {
+            html += '<div class="rule-chips" style="margin-top:8px;">';
+            const ruleLabels = {
+                consecutive_days: 'Consecutive Days',
+                max_daily_hours: 'Max Daily Hours',
+                morning_only: 'Morning Only',
+                afternoon_only: 'Afternoon Only',
+                no_friday: 'No Fridays',
+                requires_equipment: 'Equipment Required',
+                same_lecturer_as: 'Same Lecturer As',
+                different_lecturer_as: 'Different Lecturer From',
+                custom: 'Custom',
+            };
+            rules.forEach(r => {
+                const label = ruleLabels[r.rule_type] || r.rule_type;
+                const valueStr = r.value ? `: ${esc(r.value)}` : '';
+                const disabledClass = r.enabled ? '' : ' rule-chip-disabled';
+                html += `<div class="rule-chip${disabledClass}">
+                    <span>${label}${valueStr}</span>
+                    ${r.description ? `<span style="color:#98a2b3;font-size:10px;">(${esc(r.description)})</span>` : ''}
+                    <span class="rule-chip-remove" onclick="deleteModuleRule(${r.id}, ${mod.id})">&times;</span>
+                </div>`;
+            });
+            html += '</div>';
+        } else {
+            html += '<p style="color:#98a2b3;font-size:12px;margin-top:8px;">No additional scheduling rules.</p>';
+        }
+        html += '</div>';
+
+        return html;
+    }
+
+    function toggleModule(modId) {
+        const body = document.getElementById(`mcb-${modId}`);
+        const expand = document.getElementById(`mcx-${modId}`);
+        body.classList.toggle('open');
+        expand.classList.toggle('open');
+    }
+
+    async function setDeliveryMode(modId, mode) {
+        await updateModuleField(modId, 'delivery_mode', mode);
+    }
+
+    async function updateModuleField(modId, field, value) {
+        try {
+            await fetch(`/api/modules/${modId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ [field]: value }),
+            });
+            // Refresh the course
+            if (selectedCourseId) await selectCourse(selectedCourseId);
+        } catch (err) {
+            alert('Failed to update module.');
+        }
+    }
+
+    // --- Qualification Modal ---
+    function openQualModal(modId) {
+        document.getElementById('qualModuleId').value = modId;
+        const sel = document.getElementById('qualLecturerId');
+        sel.innerHTML = allLecturers.map(l => `<option value="${l.id}">${esc(l.name)}</option>`).join('');
+        document.getElementById('qualProficiency').value = 'primary';
+        document.getElementById('qualCanExamine').checked = true;
+        document.getElementById('addQualModal').classList.add('active');
+    }
+    function closeQualModal() { document.getElementById('addQualModal').classList.remove('active'); }
+
+    async function saveQualification() {
+        const payload = {
+            module_id: parseInt(document.getElementById('qualModuleId').value),
+            lecturer_id: parseInt(document.getElementById('qualLecturerId').value),
+            proficiency_level: document.getElementById('qualProficiency').value,
+            can_examine: document.getElementById('qualCanExamine').checked,
+        };
+        try {
+            const resp = await fetch('/api/qualifications', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (!resp.ok) { const err = await resp.json(); alert(err.error || 'Failed'); return; }
+            closeQualModal();
+            if (selectedCourseId) await selectCourse(selectedCourseId);
+        } catch (err) { alert('Failed to add qualification.'); }
+    }
+
+    async function deleteQual(qualId, modId) {
+        if (!confirm('Remove this lecturer qualification?')) return;
+        await fetch(`/api/qualifications/${qualId}`, { method: 'DELETE' });
+        if (selectedCourseId) await selectCourse(selectedCourseId);
+    }
+
+    // --- Module Rule Modal ---
+    function openRuleModal(modId) {
+        document.getElementById('ruleModuleId').value = modId;
+        document.getElementById('ruleType').value = 'consecutive_days';
+        document.getElementById('ruleValue').value = '';
+        document.getElementById('ruleDescription').value = '';
+        updateRuleValueHint();
+        document.getElementById('addRuleModal').classList.add('active');
+    }
+    function closeRuleModal() { document.getElementById('addRuleModal').classList.remove('active'); }
+
+    function updateRuleValueHint() {
+        const type = document.getElementById('ruleType').value;
+        const group = document.getElementById('ruleValueGroup');
+        const label = document.getElementById('ruleValueLabel');
+        const input = document.getElementById('ruleValue');
+
+        const needsValue = ['max_daily_hours', 'requires_equipment', 'same_lecturer_as', 'different_lecturer_as', 'custom'];
+        group.style.display = needsValue.includes(type) ? 'block' : 'none';
+
+        const hints = {
+            max_daily_hours: ['Max hours (e.g. 4)', 'e.g. 4'],
+            requires_equipment: ['Equipment needed', 'e.g. Oscilloscope'],
+            same_lecturer_as: ['Module code', 'e.g. CS101-M2'],
+            different_lecturer_as: ['Module code', 'e.g. CS101-M1'],
+            custom: ['Constraint description', 'Describe the constraint'],
+        };
+        if (hints[type]) { label.textContent = hints[type][0]; input.placeholder = hints[type][1]; }
+    }
+
+    async function saveModuleRule() {
+        const payload = {
+            module_id: parseInt(document.getElementById('ruleModuleId').value),
+            rule_type: document.getElementById('ruleType').value,
+            value: document.getElementById('ruleValue').value.trim() || null,
+            description: document.getElementById('ruleDescription').value.trim() || null,
+        };
+        try {
+            await fetch('/api/module-rules', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            closeRuleModal();
+            if (selectedCourseId) await selectCourse(selectedCourseId);
+        } catch (err) { alert('Failed to add rule.'); }
+    }
+
+    async function deleteModuleRule(ruleId, modId) {
+        await fetch(`/api/module-rules/${ruleId}`, { method: 'DELETE' });
+        if (selectedCourseId) await selectCourse(selectedCourseId);
+    }
+
+    function esc(s) {
+        if (!s) return '';
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    init();
+</script>
+{% endblock %}
